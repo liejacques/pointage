@@ -145,6 +145,8 @@ Deno.serve(async (request) => {
 
   const createdId = createdUser.data.user.id
   let companionId: string | null = null
+  let companionWasCreated = false
+  let companionWasLinked = false
   const personName = splitName(name)
 
   try {
@@ -171,21 +173,48 @@ Deno.serve(async (request) => {
     if (modulesResult.error) throw modulesResult.error
 
     if (modules.includes('terrain')) {
-      const companionResult = await admin
+      const existingCompanion = await admin
         .from('compagnons')
-        .insert({
-          entreprise_id: caller.entreprise_id,
-          profil_id: createdId,
-          nom: personName.nom,
-          prenom: personName.prenom,
-          initials: initialsFor(name),
-          role: 'compagnon',
-          actif: true,
-        })
-        .select('id')
-        .single()
-      if (companionResult.error) throw companionResult.error
-      companionId = companionResult.data.id
+        .select('id, profil_id')
+        .eq('entreprise_id', caller.entreprise_id)
+        .ilike('nom', personName.nom)
+        .ilike('prenom', personName.prenom)
+        .limit(1)
+        .maybeSingle()
+      if (existingCompanion.error) throw existingCompanion.error
+
+      if (existingCompanion.data?.profil_id && existingCompanion.data.profil_id !== createdId) {
+        throw new Error('Cette personne possède déjà un compte de connexion.')
+      }
+
+      if (existingCompanion.data) {
+        const companionResult = await admin
+          .from('compagnons')
+          .update({ profil_id: createdId, actif: true })
+          .eq('id', existingCompanion.data.id)
+          .select('id')
+          .single()
+        if (companionResult.error) throw companionResult.error
+        companionId = companionResult.data.id
+        companionWasLinked = true
+      } else {
+        const companionResult = await admin
+          .from('compagnons')
+          .insert({
+            entreprise_id: caller.entreprise_id,
+            profil_id: createdId,
+            nom: personName.nom,
+            prenom: personName.prenom,
+            initials: initialsFor(name),
+            role: 'compagnon',
+            actif: true,
+          })
+          .select('id')
+          .single()
+        if (companionResult.error) throw companionResult.error
+        companionId = companionResult.data.id
+        companionWasCreated = true
+      }
     }
 
     return json({
@@ -197,7 +226,11 @@ Deno.serve(async (request) => {
       },
     }, 201)
   } catch (error) {
-    if (companionId) await admin.from('compagnons').delete().eq('id', companionId)
+    if (companionWasCreated && companionId) {
+      await admin.from('compagnons').delete().eq('id', companionId)
+    } else if (companionWasLinked && companionId) {
+      await admin.from('compagnons').update({ profil_id: null }).eq('id', companionId)
+    }
     await admin.auth.admin.deleteUser(createdId)
     return json({ message: error instanceof Error ? error.message : 'Création annulée.' }, 400)
   }

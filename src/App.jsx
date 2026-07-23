@@ -50,6 +50,19 @@ const SITES = [
   },
 ]
 
+const EMPTY_SITE = {
+  id: '—',
+  title: 'Aucun chantier affecté aujourd’hui',
+  city: '',
+  address: '',
+  client: '',
+  manager: '',
+  rain: '',
+  rainTime: '',
+  rainAmount: '0 mm',
+  weatherUrl: '',
+}
+
 const INITIAL_TEAM = [
   { id: 'fabien-susin', name: 'Fabien Susin', initials: 'FS', present: true },
   { id: 'kevin-garnier', name: 'Kevin Garnier', initials: 'KG', present: true },
@@ -82,6 +95,16 @@ const ACTIONS = [
   { id: 'meeting', label: 'Réunion', short: 'RÉUNION', importance: 'secondary' },
   { id: 'materials', label: 'Enlèvement matériaux', short: 'ENLÈVEMENT MATÉRIAUX', importance: 'secondary' },
 ]
+
+const HISTORY_ACTIONS = {
+  debut_activite: "Début d'activité",
+  faconnage: 'Façonnage',
+  pause: 'Pause',
+  fin_activite: "Fin d'activité",
+  consigne: 'Consigne',
+  reunion: 'Réunion',
+  enlevement_materiaux: 'Enlèvement matériaux',
+}
 
 const FILES = [
   { id: 'quote', label: 'Devis', meta: 'Document PDF', icon: 'file', status: 'PDF', primary: true },
@@ -117,6 +140,28 @@ function dateToday() {
     .format(new Date())
     .replace(/\./g, '')
     .toUpperCase()
+}
+
+function dateTodayLong() {
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  }).format(new Date())
+}
+
+function formatPunchTime(value) {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function formatWorkedMinutes(value = 0) {
+  const hours = Math.floor(value / 60)
+  const minutes = value % 60
+  return `${hours} h ${String(minutes).padStart(2, '0')}`
 }
 
 function googleMapsUrl(address) {
@@ -163,7 +208,20 @@ function Header({ site, clock, todayLabel, openSiteSelector, profile, onLogout }
   )
 }
 
-function SiteContext({ site, flash, openFile, openQuote, lifting = NEXT_LIFTING }) {
+function SiteContext({ site, flash, openFile, openQuote, lifting = NEXT_LIFTING, empty = false, loading = false }) {
+  if (empty) {
+    return (
+      <section className="site-context site-context-empty">
+        <span className="essential-icon"><Icon name="info" size={21} /></span>
+        <div>
+          <span>AFFECTATION DU JOUR</span>
+          <h1>{loading ? 'Chargement du chantier…' : 'Aucun chantier affecté aujourd’hui'}</h1>
+          <p>{loading ? 'Synchronisation du planning et de l’équipe.' : 'Le conducteur doit ajouter cette personne au planning avant le premier pointage.'}</p>
+        </div>
+      </section>
+    )
+  }
+
   const hasRain = site.rainAmount !== '0 mm'
   return (
     <section className="site-context">
@@ -187,11 +245,52 @@ function SiteContext({ site, flash, openFile, openQuote, lifting = NEXT_LIFTING 
           <div><span>PROCHAIN GRUTAGE</span><strong>{lifting.when}</strong><em>{lifting.truck}</em></div>
           <Icon name="arrow" size={15} />
         </button>
-        <button className="quote-shortcut" onClick={openQuote} aria-label="Ouvrir directement le devis au format PDF">
+        <button className="quote-shortcut" onClick={openQuote} aria-label="Ouvrir directement le devis au format PDF" disabled={site.quoteAvailable === false}>
           <span className="essential-icon"><Icon name="file" size={19} /></span>
-          <div><span>DEVIS</span><strong>Ouvrir le PDF</strong></div>
+          <div><span>DEVIS</span><strong>{site.quoteAvailable === false ? 'Aucun PDF disponible' : 'Ouvrir le PDF'}</strong></div>
           <Icon name="arrow" size={15} />
         </button>
+      </div>
+    </section>
+  )
+}
+
+function PointageHistory({ punches = [], reports = [], siteDbId }) {
+  const sitePunches = punches.filter((punch) => punch.chantier_id === siteDbId).slice(0, 20)
+  const siteReports = reports.filter((report) => report.chantier_id === siteDbId)
+  const totalMinutes = siteReports.reduce((sum, report) => sum + (report.minutes_travaillees || 0), 0)
+
+  return (
+    <section className="erp-panel pointage-history">
+      <header className="history-header">
+        <div><span>HISTORIQUE DU JOUR</span><h2>{dateTodayLong()}</h2></div>
+        <div className="history-totals">
+          <span><strong>{sitePunches.length}</strong> pointages réalisés</span>
+          <span><strong>{formatWorkedMinutes(totalMinutes)}</strong> aujourd’hui</span>
+        </div>
+      </header>
+      <div className="history-body">
+        <div className="history-people">
+          {siteReports.map((report) => (
+            <article key={report.affectation_id}>
+              <span className="person-initials">{report.compagnon_nom?.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span>
+              <div><strong>{report.compagnon_nom}</strong><span>{report.nombre_pointages} pointage{report.nombre_pointages === 1 ? '' : 's'}</span></div>
+              <b>{formatWorkedMinutes(report.minutes_travaillees)}</b>
+            </article>
+          ))}
+          {!siteReports.length && <p className="empty-state">Aucune heure calculée pour ce chantier aujourd’hui.</p>}
+        </div>
+        <div className="history-events">
+          {sitePunches.map((punch) => (
+            <article key={punch.id}>
+              <time>{formatPunchTime(punch.pointe_a)}</time>
+              <span className="person-initials">{punch.compagnons?.initiales || '—'}</span>
+              <div><strong>{punch.compagnons?.nom_complet || 'Personne'}</strong><span>{HISTORY_ACTIONS[punch.action] || punch.action}</span></div>
+              <span className="history-valid"><Icon name="check" size={13} />ENVOYÉ</span>
+            </article>
+          ))}
+          {!sitePunches.length && <p className="empty-state">Les pointages de la journée apparaîtront ici dès la première action.</p>}
+        </div>
       </div>
     </section>
   )
@@ -262,7 +361,7 @@ function TeamPanel({
   return (
     <section className="erp-panel team-panel team-standard">
       <header className="panel-header team-header standard-team-header">
-        <div><span>ÉQUIPE ACTUELLE</span><h2>{team.length} personnes</h2></div>
+        <div><span>ÉQUIPE ACTUELLE</span><h2>{team.length} personne{team.length === 1 ? '' : 's'}</h2></div>
         <div className="standard-team-actions">
           <button className={showVehicle ? 'is-active' : ''} onClick={() => setShowVehicle((current) => !current)}><Icon name="truck" size={15} /><span>CHANGER VÉHICULE</span></button>
           <button onClick={() => setMode('add')}><Icon name="plus" size={15} /><span>AJOUTER DANS L’ÉQUIPE</span></button>
@@ -277,7 +376,7 @@ function TeamPanel({
         )}
         <button className={`current-target-all ${selectedTarget === 'team' ? 'is-selected' : ''}`} onClick={() => selectTarget('team')} disabled={!presentTeam.length} aria-pressed={selectedTarget === 'team'}>
           <span className="team-target-icon"><Icon name="people" size={18} /></span>
-          <div><strong>Toute l’équipe</strong><span>{presentTeam.length} personnes cochées</span></div>
+          <div><strong>Toute l’équipe</strong><span>{presentTeam.length} personne{presentTeam.length === 1 ? '' : 's'} cochée{presentTeam.length === 1 ? '' : 's'}</span></div>
           <span className="selection-check"><Icon name="check" size={13} /></span>
         </button>
         <div className="standard-team-list">
@@ -361,20 +460,21 @@ function Drawer({ title, subtitle, close, children }) {
 }
 
 export default function App({ profile = null, onLogout = null }) {
-  const [siteId, setSiteId] = useState('112430')
-  const [sites, setSites] = useState(SITES)
-  const [team, setTeam] = useState(INITIAL_TEAM)
-  const [available, setAvailable] = useState(INITIAL_AVAILABLE)
-  const [vehicleId, setVehicleId] = useState(VEHICLES[0].id)
-  const [vehicles, setVehicles] = useState(VEHICLES)
+  const [siteId, setSiteId] = useState(profile ? '' : '112430')
+  const [sites, setSites] = useState(profile ? [] : SITES)
+  const [team, setTeam] = useState(profile ? [] : INITIAL_TEAM)
+  const [available, setAvailable] = useState(profile ? [] : INITIAL_AVAILABLE)
+  const [vehicleId, setVehicleId] = useState(profile ? 'none' : VEHICLES[0].id)
+  const [vehicles, setVehicles] = useState(profile ? [{ id: 'none', label: 'Aucun véhicule affecté' }] : VEHICLES)
   const [terrainData, setTerrainData] = useState(null)
   const [selectedTarget, setSelectedTarget] = useState('team')
   const [drawer, setDrawer] = useState(null)
   const [fileId, setFileId] = useState(null)
   const [toast, setToast] = useState('')
   const [clock, setClock] = useState(timeNow())
+  const [loadingTerrain, setLoadingTerrain] = useState(Boolean(profile))
 
-  const site = useMemo(() => sites.find((item) => item.id === siteId) ?? sites[0] ?? SITES[0], [siteId, sites])
+  const site = useMemo(() => sites.find((item) => item.id === siteId) ?? sites[0] ?? (profile ? EMPTY_SITE : SITES[0]), [profile, siteId, sites])
   const presentTeam = useMemo(() => team.filter((member) => member.present), [team])
   const targetLabel = selectedTarget === 'team'
     ? `Toute l’équipe · ${presentTeam.length}`
@@ -382,7 +482,19 @@ export default function App({ profile = null, onLogout = null }) {
   const todayLabel = dateToday()
   const nextLifting = useMemo(() => {
     const operation = terrainData?.logistics.find((item) => item.chantier_id === site.dbId && item.type_operation === 'grutage')
-    if (!operation) return NEXT_LIFTING
+    if (!operation) {
+      if (!profile) return NEXT_LIFTING
+      return {
+        when: 'Aucun grutage planifié',
+        company: 'Aucune opération à venir',
+        driver: 'Non communiqué',
+        phone: null,
+        truck: 'À planifier',
+        capacity: 'Non communiquée',
+        duration: 'non définie',
+        cargo: [],
+      }
+    }
     return {
       when: new Intl.DateTimeFormat('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(operation.debut_prevu)),
       company: operation.fournisseur || 'Prestataire non communiqué',
@@ -393,7 +505,7 @@ export default function App({ profile = null, onLogout = null }) {
       duration: 'selon planning',
       cargo: operation.chargement || [],
     }
-  }, [terrainData, site.dbId])
+  }, [profile, terrainData, site.dbId])
 
   function applySiteTeam(reference, data = terrainData) {
     if (!data) return
@@ -428,27 +540,44 @@ export default function App({ profile = null, onLogout = null }) {
   useEffect(() => {
     if (!profile) return undefined
     let active = true
+    setLoadingTerrain(true)
     loadTerrainData()
       .then((data) => {
         if (!active) return
         const backendSites = [...new Map(data.assignments.map((item) => [item.chantier_id, item.chantiers])).values()]
           .filter(Boolean)
-          .map((item) => ({
-            id: item.reference,
-            dbId: item.id,
-            title: item.nom,
-            city: item.ville,
-            address: [item.adresse, item.code_postal, item.ville].filter(Boolean).join(', '),
-            client: item.client_nom || 'Client chantier',
-            manager: 'Conducteur de travaux',
-            rain: 'Voir les prévisions',
-            rainTime: 'Prévisions locales',
-            rainAmount: '0 mm',
-            weatherUrl: item.meteo_url || `https://meteofrance.com/previsions-meteo-france/${encodeURIComponent(item.ville)}/${item.code_postal || ''}`,
-          }))
+          .map((item) => {
+            const addressParts = [item.adresse, item.code_postal, item.ville]
+              .filter(Boolean)
+              .filter((value, index, values) => values.indexOf(value) === index)
+            return {
+              id: item.reference,
+              dbId: item.id,
+              title: item.nom,
+              city: item.ville,
+              address: addressParts.join(', '),
+              client: item.client_nom || 'Client chantier',
+              manager: 'Conducteur de travaux',
+              rain: 'Voir les prévisions',
+              rainTime: 'Prévisions locales',
+              rainAmount: '0 mm',
+              weatherUrl: item.meteo_url || `https://meteofrance.com/previsions-meteo-france/${encodeURIComponent(item.ville)}/${item.code_postal || ''}`,
+              quoteAvailable: data.documents.some((document) => document.chantier_id === item.id && document.type_document === 'devis'),
+            }
+          })
         if (backendSites.length) {
           setSites(backendSites)
           setSiteId(backendSites[0].id)
+        } else {
+          setSites([])
+          setSiteId('')
+          setTeam([])
+          setAvailable(data.people.map((person) => ({
+            id: person.id,
+            name: person.nom_complet,
+            initials: person.initiales,
+            present: true,
+          })))
         }
         setVehicles([
           ...data.vehicles.map((item) => ({ id: item.id, label: `${item.libelle}${item.immatriculation ? ` · ${item.immatriculation}` : ''}` })),
@@ -459,6 +588,9 @@ export default function App({ profile = null, onLogout = null }) {
         flushPunchQueue()
       })
       .catch((error) => setToast(error.message))
+      .finally(() => {
+        if (active) setLoadingTerrain(false)
+      })
 
     const reconnect = () => flushPunchQueue().then((remaining) => {
       if (!remaining) setToast('Pointages en attente synchronisés')
@@ -499,6 +631,9 @@ export default function App({ profile = null, onLogout = null }) {
       : [selectedTarget]
     try {
       const result = await recordPunches({ personIds: people, siteId: site.dbId, action: actionMap[action.id] })
+      if (!result.queued) {
+        setTerrainData(await loadTerrainData())
+      }
       setToast(result.queued ? `${result.queued} pointage(s) gardé(s) hors connexion` : `${action.label} · ${targetLabel} · ${timeNow()}`)
     } catch (error) {
       setToast(error.message)
@@ -584,6 +719,10 @@ export default function App({ profile = null, onLogout = null }) {
   async function openQuote() {
     const quote = terrainData?.documents.find((item) => item.chantier_id === site.dbId && item.type_document === 'devis')
     if (!quote) {
+      if (profile) {
+        setToast('Aucun devis PDF disponible pour ce chantier')
+        return
+      }
       window.open('/documents/devis-2025-0847.pdf', '_blank', 'noopener,noreferrer')
       return
     }
@@ -600,7 +739,8 @@ export default function App({ profile = null, onLogout = null }) {
       <main className="erp-dashboard">
         <TeamPanel team={team} presentTeam={presentTeam} available={available} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} vehicleId={vehicleId} changeVehicle={changeVehicle} vehicles={vehicles} togglePresence={togglePresence} removeMember={removeMember} addMember={addMember} />
         <ActionPanel onAction={recordAction} targetLabel={targetLabel} disabled={!presentTeam.length} />
-        <SiteContext site={site} flash={setToast} openFile={openFile} openQuote={openQuote} lifting={nextLifting} />
+        <SiteContext site={site} flash={setToast} openFile={openFile} openQuote={openQuote} lifting={nextLifting} empty={Boolean(profile) && !site.dbId} loading={loadingTerrain} />
+        <PointageHistory punches={terrainData?.punches} reports={terrainData?.reports} siteDbId={site.dbId} />
       </main>
       {drawer === 'site' && <SiteDrawer site={site} sites={sites} selectSite={selectSite} close={() => setDrawer(null)} />}
       {drawer === 'file' && <FileDrawer fileId={fileId} site={site} close={() => setDrawer(null)} flash={setToast} lifting={nextLifting} />}

@@ -560,6 +560,9 @@ export async function loadTerrainData(date = localDate()) {
     assignments: data.assignments,
     people: data.people,
     vehicles: data.vehicles,
+    events: data.events.filter((event) => siteIds.has(event.chantier_id)),
+    punches: data.punches.filter((punch) => siteIds.has(punch.chantier_id)),
+    reports: data.reports.filter((report) => siteIds.has(report.chantier_id)),
     documents: data.documents.filter((document) => (
       document.visible_terrain && siteIds.has(document.chantier_id)
     )),
@@ -583,15 +586,20 @@ function writeQueue(queue) {
 
 const ACTION_ACTIVITY = {
   start: 'production',
+  debut_activite: 'production',
   fabrication: 'production',
+  faconnage: 'production',
   pause: 'pause',
   instruction: 'admin',
+  consigne: 'admin',
   meeting: 'admin',
+  reunion: 'admin',
   materials: 'preparation',
+  enlevement_materiaux: 'preparation',
 }
 
 async function sendPunch(item) {
-  if (item.action === 'finish') {
+  if (item.action === 'finish' || item.action === 'fin_activite') {
     const { error } = await supabase.rpc('terminer_pointage_v2', {
       p_compagnon_id: item.personId,
       p_fin: item.eventAt,

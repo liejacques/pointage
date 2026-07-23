@@ -32,6 +32,7 @@ const user = createClient(url, publishableKey, {
 
 let testUserId = null
 let companionId = null
+let preexistingCompanionId = null
 let siteId = null
 let vehicleId = null
 let documentId = null
@@ -65,6 +66,24 @@ try {
   const rhContext = await unwrap(rh.rpc('get_pointage_user_context_v1'), 'Contexte RH')
   assert(rhContext?.modules?.includes('rh'), 'Le compte RH ne possède pas le module RH.')
 
+  const preexistingCompanion = await unwrap(
+    admin
+      .from('compagnons')
+      .insert({
+        entreprise_id: rhContext.entreprise_id,
+        profil_id: null,
+        nom: 'Codex',
+        prenom: 'Test',
+        initials: 'TC',
+        role: 'compagnon',
+        actif: true,
+      })
+      .select('id')
+      .single(),
+    'Préparation compagnon existant',
+  )
+  preexistingCompanionId = preexistingCompanion.id
+
   const created = await unwrap(rh.functions.invoke('create-short-user', {
     body: {
       name: 'Test Codex',
@@ -88,6 +107,7 @@ try {
     'Compagnon lié',
   )
   companionId = companion.id
+  assert(companionId === preexistingCompanionId, 'La fiche compagnon existante n’a pas été rattachée.')
 
   siteId = await unwrap(user.rpc('creer_chantier_pointage_v1', {
     p_reference: `TEST-${suffix}`,
@@ -121,7 +141,7 @@ try {
     p_debut: new Date().toISOString(),
     p_source: 'chef',
     p_confiance: 'haute',
-    p_note: 'action:start',
+    p_note: 'action:debut_activite',
     p_client_action_id: startActionId,
   }), 'Début pointage')
   await unwrap(user.rpc('terminer_pointage_v2', {
@@ -171,8 +191,13 @@ try {
   )
   assert(planning.length === 1, 'Affectation planning non relue.')
   assert(logistics.length === 1, 'Mouvement logistique non relu.')
+  const pointages = await unwrap(
+    user.from('pointage_evenements').select('id, debut, fin, note').eq('compagnon_id', companionId),
+    'Lecture historique pointage',
+  )
+  assert(pointages.length === 1 && Boolean(pointages[0].fin), 'Historique début/fin incomplet.')
 
-  console.log('Vérification backend réussie : RH, droits, planning, pointage, véhicule, logistique et document.')
+  console.log('Vérification backend réussie : RH, rattachement compagnon, droits, planning, historique pointage, véhicule, logistique et document.')
 } finally {
   if (documentPath) await cleanup(admin.storage.from('documents').remove([documentPath]), 'fichier')
   if (documentId) await cleanup(admin.from('documents').delete().eq('id', documentId), 'document')
@@ -187,5 +212,8 @@ try {
   }
   if (vehicleId) await cleanup(admin.from('vehicules').delete().eq('id', vehicleId), 'véhicule')
   if (companionId) await cleanup(admin.from('compagnons').delete().eq('id', companionId), 'compagnon')
+  if (preexistingCompanionId && preexistingCompanionId !== companionId) {
+    await cleanup(admin.from('compagnons').delete().eq('id', preexistingCompanionId), 'compagnon existant')
+  }
   if (testUserId) await cleanup(admin.auth.admin.deleteUser(testUserId), 'utilisateur Auth')
 }

@@ -10,6 +10,7 @@ Fonctions disponibles :
 - actions « Changer véhicule » et « Ajouter dans l’équipe » réunies dans l’en-tête ;
 - annuaire complet avec recherche pour ajouter du personnel ;
 - liste d’équipe sans zone de défilement interne sur téléphone ;
+- historique du jour avec les actions envoyées, le nombre de pointages et les heures calculées ;
 - accès direct à Google Maps depuis l’adresse du chantier ;
 - accès direct aux prévisions Météo-France du lieu ;
 - ouverture directe du devis PDF ;
@@ -44,6 +45,8 @@ Sans configuration Supabase, l’écran de connexion propose un mode démonstrat
 Le module se branche sur le projet Supabase du SaaS Aetheris existant. Les migrations `001` à `014` présentes ici sont des marqueurs de dépendance : leur schéma complet reste géré par le dépôt principal Aetheris. Les migrations datées ajoutent uniquement les capacités nécessaires au pointage, à la conduite de travaux et au module RH.
 
 Le module réutilise notamment `entreprises`, `profils`, `compagnons`, `chantiers`, `planning_entries`, `pointage_evenements`, `documents` et le bucket privé `documents`. Il ajoute les droits par module, les véhicules, les détails d’affectation, la logistique et les alertes sans recréer les tables socle.
+
+Une session authentifiée n’affiche jamais les chantiers, grutages ou devis fictifs du mode démonstration. Sans affectation du jour, le terrain indique clairement que le planning doit être complété et bloque le pointage.
 
 ```powershell
 npx supabase login
