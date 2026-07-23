@@ -5,9 +5,10 @@ Cockpit React/Vite de pointage chantier Aetheris. L’interface s’adapte au t�
 Fonctions disponibles :
 
 - choix immédiat entre toute l’équipe et une personne précise avant le pointage ;
-- équipe du jour affichée en premier sur téléphone, sans métier ni spécialité ;
-- gestion de l’équipe directement à la place du sélecteur de pointage : véhicule, présence et retrait ;
-- ajout du personnel au même endroit avec annuaire complet et recherche ;
+- équipe actuelle affichée comme vue standard, sans métier ni spécialité ;
+- cases cochées ou vides pour inclure chaque personne dans le pointage ;
+- actions « Changer véhicule » et « Ajouter dans l’équipe » réunies dans l’en-tête ;
+- annuaire complet avec recherche pour ajouter du personnel ;
 - actions de pointage accessibles sans défilement sur un écran mobile courant ;
 - accès direct à Google Maps depuis l’adresse du chantier ;
 - accès direct aux prévisions Météo-France du lieu ;
