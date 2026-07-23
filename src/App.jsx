@@ -40,10 +40,26 @@ const SITES = [
 ]
 
 const INITIAL_TEAM = [
-  { id: 'fabien-susin', name: 'Fabien Susin', initials: 'FS' },
-  { id: 'kevin-garnier', name: 'Kevin Garnier', initials: 'KG' },
-  { id: 'jocelin-saur', name: 'Jocelin Saur', initials: 'JS' },
-  { id: 'michael-daluin', name: 'Michael Daluin', initials: 'MD' },
+  { id: 'fabien-susin', name: 'Fabien Susin', initials: 'FS', present: true },
+  { id: 'kevin-garnier', name: 'Kevin Garnier', initials: 'KG', present: true },
+  { id: 'jocelin-saur', name: 'Jocelin Saur', initials: 'JS', present: true },
+  { id: 'michael-daluin', name: 'Michael Daluin', initials: 'MD', present: true },
+]
+
+const INITIAL_AVAILABLE = [
+  { id: 'rodolphe-blanchard', name: 'Rodolphe Blanchard', initials: 'RB', present: true },
+  { id: 'alexandre-bonani', name: 'Alexandre Bonani', initials: 'AB', present: true },
+  { id: 'lucas-collarde', name: 'Lucas Collarde', initials: 'LC', present: true },
+  { id: 'benjamin-martin', name: 'Benjamin Martin', initials: 'BM', present: true },
+  { id: 'kevin-perrin', name: 'Kévin Perrin', initials: 'KP', present: true },
+  { id: 'julien-pierrevelcin', name: 'Julien Pierrevelcin', initials: 'JP', present: true },
+]
+
+const VEHICLES = [
+  { id: 'trafic', label: 'Renault Trafic · FM-637-SA' },
+  { id: 'boxer', label: 'Peugeot Boxer · GK-218-ND' },
+  { id: 'master', label: 'Renault Master · GH-904-KL' },
+  { id: 'none', label: 'Aucun véhicule affecté' },
 ]
 
 const ACTIONS = [
@@ -96,6 +112,10 @@ function googleMapsUrl(address) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 }
 
+function personInitials(firstName, lastName) {
+  return `${firstName.trim().charAt(0)}${lastName.trim().charAt(0)}`.toUpperCase()
+}
+
 function Icon({ name, size = 20 }) {
   const paths = {
     down: <path d="m7 10 5 5 5-5" />,
@@ -115,6 +135,8 @@ function Icon({ name, size = 20 }) {
     plan: <><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2Z" /><path d="M9 4v14M15 6v14" /></>,
     truck: <><path d="M3 6h11v11H3ZM14 10h4l3 3v4h-7Z" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></>,
     crane: <><path d="M5 21h8M9 21V5M5 5h12M9 8h8l3 3M15 5v5M19 11v4" /><path d="M17 15h4v3h-4Z" /></>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></>,
+    sliders: <><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></>,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>
 }
@@ -168,7 +190,7 @@ function SiteContext({ site, flash, openFile }) {
   )
 }
 
-function ActionPanel({ onAction, targetLabel }) {
+function ActionPanel({ onAction, targetLabel, disabled }) {
   return (
     <section className="erp-panel actions-panel">
       <header className="panel-header">
@@ -177,7 +199,7 @@ function ActionPanel({ onAction, targetLabel }) {
       </header>
       <div className="action-grid">
         {ACTIONS.map((action) => (
-          <button className={`action-button ${action.importance}`} key={action.id} onClick={() => onAction(action)}>
+          <button className={`action-button ${action.importance}`} key={action.id} onClick={() => onAction(action)} disabled={disabled}>
             <strong>{action.label}</strong>
           </button>
         ))}
@@ -186,16 +208,20 @@ function ActionPanel({ onAction, targetLabel }) {
   )
 }
 
-function TeamPanel({ team, selectedTarget, selectTarget }) {
+function TeamPanel({ team, selectedTarget, selectTarget, openManagement }) {
   return (
     <section className="erp-panel team-panel">
       <header className="panel-header team-header">
         <div><span>ÉQUIPE DU JOUR</span><h2>Qui pointer ?</h2></div>
-        <span className="team-count">{team.length} PERSONNES</span>
+        <div className="team-header-actions">
+          <span className="team-count">{team.length} PRÉSENTS</span>
+          <button className="manage-team-button" onClick={openManagement}><Icon name="sliders" size={15} />GÉRER</button>
+        </div>
       </header>
       <button
         className={`whole-team-target ${selectedTarget === 'team' ? 'is-selected' : ''}`}
         onClick={() => selectTarget('team')}
+        disabled={!team.length}
         aria-pressed={selectedTarget === 'team'}
       >
         <span className="team-target-icon"><Icon name="people" size={20} /></span>
@@ -215,8 +241,93 @@ function TeamPanel({ team, selectedTarget, selectTarget }) {
             <span className="selection-check"><Icon name="check" size={13} /></span>
           </button>
         ))}
+        {!team.length && <div className="no-present-team">Aucune personne présente. Ouvrir « Gérer » pour modifier l’équipe.</div>}
       </div>
     </section>
+  )
+}
+
+function TeamManagementDrawer({
+  team,
+  available,
+  vehicleId,
+  changeVehicle,
+  togglePresence,
+  removeMember,
+  addMember,
+  createMember,
+  close,
+}) {
+  const [tab, setTab] = useState('current')
+  const [search, setSearch] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const filteredPeople = available.filter((person) => person.name.toLocaleLowerCase('fr').includes(search.trim().toLocaleLowerCase('fr')))
+
+  function submitNewPerson(event) {
+    event.preventDefault()
+    if (!firstName.trim() || !lastName.trim()) return
+    createMember(firstName.trim(), lastName.trim())
+    setFirstName('')
+    setLastName('')
+    setTab('current')
+  }
+
+  return (
+    <Drawer title="Gérer l’équipe" subtitle={`${team.filter((member) => member.present).length} présents · ${team.length} affectés`} close={close} wide>
+      <div className="team-management">
+        <div className="management-tabs" role="tablist" aria-label="Gestion de l’équipe">
+          <button className={tab === 'current' ? 'is-active' : ''} onClick={() => setTab('current')} role="tab" aria-selected={tab === 'current'}>ÉQUIPE ACTUELLE <span>{team.length}</span></button>
+          <button className={tab === 'add' ? 'is-active' : ''} onClick={() => setTab('add')} role="tab" aria-selected={tab === 'add'}>AJOUTER <span>{available.length}</span></button>
+        </div>
+
+        {tab === 'current' ? (
+          <div className="management-current">
+            <label className="vehicle-selector">
+              <span className="management-icon"><Icon name="truck" size={19} /></span>
+              <div><span>VÉHICULE AFFECTÉ</span><select value={vehicleId} onChange={(event) => changeVehicle(event.target.value)}>{VEHICLES.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.label}</option>)}</select></div>
+            </label>
+            <div className="management-section-title"><span>MEMBRES DE L’ÉQUIPE</span><strong>{team.filter((member) => member.present).length} présents</strong></div>
+            <div className="current-team-list">
+              {team.map((member) => (
+                <div className={`current-member ${member.present ? '' : 'is-absent'}`} key={member.id}>
+                  <span className="person-initials">{member.initials}</span>
+                  <strong>{member.name}</strong>
+                  <button className={`management-presence ${member.present ? 'is-present' : ''}`} onClick={() => togglePresence(member.id)} aria-pressed={member.present}>
+                    <span><Icon name="check" size={13} /></span>{member.present ? 'PRÉSENT' : 'ABSENT'}
+                  </button>
+                  <button className="management-remove" onClick={() => removeMember(member.id)} aria-label={`Retirer ${member.name} de l’équipe`}><Icon name="close" size={18} /></button>
+                </div>
+              ))}
+              {!team.length && <p className="empty-state">L’équipe est vide. Ajoutez une personne depuis l’annuaire.</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="management-add">
+            <label className="directory-search"><Icon name="search" size={19} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher une personne…" /></label>
+            <div className="management-section-title"><span>PERSONNEL DISPONIBLE</span><strong>{filteredPeople.length} résultats</strong></div>
+            <div className="directory-list">
+              {filteredPeople.map((person) => (
+                <div className="directory-person" key={person.id}>
+                  <span className="person-initials">{person.initials}</span>
+                  <strong>{person.name}</strong>
+                  <button onClick={() => addMember(person.id)}><Icon name="plus" size={16} />AJOUTER</button>
+                </div>
+              ))}
+              {!filteredPeople.length && <p className="empty-state">Aucune personne trouvée.</p>}
+            </div>
+            <form className="create-person-form" onSubmit={submitNewPerson}>
+              <div className="create-person-heading"><div><span>NOUVELLE PERSONNE</span><strong>Ajouter sans quitter le chantier</strong></div><span className="new-initials">{personInitials(firstName, lastName) || '—'}</span></div>
+              <div className="create-person-fields">
+                <label><span>PRÉNOM</span><input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="Prénom" /></label>
+                <label><span>NOM</span><input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Nom" /></label>
+              </div>
+              <button className="create-person-button" type="submit" disabled={!firstName.trim() || !lastName.trim()}><Icon name="plus" size={17} />CRÉER ET AJOUTER</button>
+            </form>
+          </div>
+        )}
+      </div>
+    </Drawer>
   )
 }
 
@@ -270,10 +381,10 @@ function FileDrawer({ fileId, site, close, flash }) {
   return <Drawer title={file.label} subtitle={`Chantier ${site.id}`} close={close}>{content[file.id]}</Drawer>
 }
 
-function Drawer({ title, subtitle, close, children }) {
+function Drawer({ title, subtitle, close, children, wide = false }) {
   return (
     <div className="drawer-overlay" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && close()}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label={title}>
+      <aside className={`drawer ${wide ? 'drawer-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <header><div><span>{subtitle}</span><strong>{title}</strong></div><button onClick={close} aria-label="Fermer"><Icon name="close" size={22} /></button></header>
         <div className="drawer-body">{children}</div>
       </aside>
@@ -283,6 +394,9 @@ function Drawer({ title, subtitle, close, children }) {
 
 export default function App() {
   const [siteId, setSiteId] = useState('112430')
+  const [team, setTeam] = useState(INITIAL_TEAM)
+  const [available, setAvailable] = useState(INITIAL_AVAILABLE)
+  const [vehicleId, setVehicleId] = useState(VEHICLES[0].id)
   const [selectedTarget, setSelectedTarget] = useState('team')
   const [drawer, setDrawer] = useState(null)
   const [fileId, setFileId] = useState(null)
@@ -290,9 +404,10 @@ export default function App() {
   const [clock, setClock] = useState(timeNow())
 
   const site = useMemo(() => SITES.find((item) => item.id === siteId) ?? SITES[0], [siteId])
+  const presentTeam = useMemo(() => team.filter((member) => member.present), [team])
   const targetLabel = selectedTarget === 'team'
-    ? `Toute l’équipe · ${INITIAL_TEAM.length}`
-    : INITIAL_TEAM.find((member) => member.id === selectedTarget)?.name ?? 'Toute l’équipe'
+    ? `Toute l’équipe · ${presentTeam.length}`
+    : team.find((member) => member.id === selectedTarget)?.name ?? 'Toute l’équipe'
   const todayLabel = dateToday()
 
   useEffect(() => {
@@ -309,7 +424,47 @@ export default function App() {
   }, [toast])
 
   function recordAction(action) {
+    if (!presentTeam.length) {
+      setToast('Aucune personne présente à pointer')
+      return
+    }
     setToast(`${action.label} · ${targetLabel} · ${timeNow()}`)
+  }
+
+  function togglePresence(id) {
+    const member = team.find((person) => person.id === id)
+    if (!member) return
+    setTeam((current) => current.map((person) => person.id === id ? { ...person, present: !person.present } : person))
+    if (selectedTarget === id && member.present) setSelectedTarget('team')
+    setToast(`${member.name} · ${member.present ? 'absent' : 'présent'}`)
+  }
+
+  function removeMember(id) {
+    const member = team.find((person) => person.id === id)
+    if (!member) return
+    setTeam((current) => current.filter((person) => person.id !== id))
+    setAvailable((current) => [...current, { ...member, present: true }])
+    if (selectedTarget === id) setSelectedTarget('team')
+    setToast(`${member.name} retiré de l’équipe`)
+  }
+
+  function addMember(id) {
+    const member = available.find((person) => person.id === id)
+    if (!member) return
+    setAvailable((current) => current.filter((person) => person.id !== id))
+    setTeam((current) => [...current, { ...member, present: true }])
+    setToast(`${member.name} ajouté à l’équipe`)
+  }
+
+  function createMember(firstName, lastName) {
+    const member = {
+      id: `${firstName}-${lastName}-${Date.now()}`.toLocaleLowerCase('fr').replace(/[^a-z0-9]+/g, '-'),
+      name: `${firstName} ${lastName}`,
+      initials: personInitials(firstName, lastName),
+      present: true,
+    }
+    setTeam((current) => [...current, member])
+    setToast(`${member.name} créé et ajouté`)
   }
 
   function selectSite(id) {
@@ -327,10 +482,11 @@ export default function App() {
     <div className="app-shell">
       <Header site={site} clock={clock} todayLabel={todayLabel} openSiteSelector={() => setDrawer('site')} />
       <main className="erp-dashboard">
-        <TeamPanel team={INITIAL_TEAM} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} />
-        <ActionPanel onAction={recordAction} targetLabel={targetLabel} />
+        <TeamPanel team={presentTeam} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} openManagement={() => setDrawer('team')} />
+        <ActionPanel onAction={recordAction} targetLabel={targetLabel} disabled={!presentTeam.length} />
         <SiteContext site={site} flash={setToast} openFile={openFile} />
       </main>
+      {drawer === 'team' && <TeamManagementDrawer team={team} available={available} vehicleId={vehicleId} changeVehicle={setVehicleId} togglePresence={togglePresence} removeMember={removeMember} addMember={addMember} createMember={createMember} close={() => setDrawer(null)} />}
       {drawer === 'site' && <SiteDrawer site={site} selectSite={selectSite} close={() => setDrawer(null)} />}
       {drawer === 'file' && <FileDrawer fileId={fileId} site={site} close={() => setDrawer(null)} flash={setToast} />}
       {toast && <div className="toast" role="status"><span className="green-check"><Icon name="check" size={13} /></span>{toast}</div>}
