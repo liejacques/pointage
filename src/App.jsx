@@ -40,17 +40,10 @@ const SITES = [
 ]
 
 const INITIAL_TEAM = [
-  { id: 'mult1', code: 'MULT1', name: 'Thomas Muller', role: "Chef d'équipe", present: true },
-  { id: 'diay1', code: 'DIAY1', name: 'Yann Diallo', role: 'Couvreur', present: true },
-  { id: 'bens2', code: 'BENS2', name: 'Sofiane Benali', role: 'Zingueur', present: true },
-  { id: 'renk3', code: 'RENK3', name: 'Kévin Renaud', role: 'Apprenti', present: true },
-]
-
-const INITIAL_AVAILABLE = [
-  { id: 'mara2', code: 'MARA2', name: 'Lina Martin', role: 'Couvreuse', present: true },
-  { id: 'gira4', code: 'GIRA4', name: 'Noé Girard', role: 'Aide couvreur', present: true },
-  { id: 'klei3', code: 'KLEI3', name: 'Marc Klein', role: 'Zingueur', present: true },
-  { id: 'bern2', code: 'BERN2', name: 'Luc Bernard', role: 'Couvreur', present: true },
+  { id: 'fabien-susin', name: 'Fabien Susin', initials: 'FS' },
+  { id: 'kevin-garnier', name: 'Kevin Garnier', initials: 'KG' },
+  { id: 'jocelin-saur', name: 'Jocelin Saur', initials: 'JS' },
+  { id: 'michael-daluin', name: 'Michael Daluin', initials: 'MD' },
 ]
 
 const ACTIONS = [
@@ -63,23 +56,8 @@ const ACTIONS = [
   { id: 'materials', label: 'Enlèvement matériaux', short: 'ENLÈVEMENT MATÉRIAUX', importance: 'secondary' },
 ]
 
-const INITIAL_EVENTS = [
-  { id: 'today-4', dayOffset: 0, time: '12:41', type: 'DÉBUT ACTIVITÉ', detail: 'Reprise après pause', fixed: true },
-  { id: 'today-3', dayOffset: 0, time: '12:02', type: 'PAUSE', detail: 'Équipe complète', fixed: true },
-  { id: 'today-2', dayOffset: 0, time: '09:18', type: 'FAÇONNAGE', detail: 'Équipe complète', fixed: true },
-  { id: 'today-1', dayOffset: 0, time: '07:34', type: 'DÉBUT ACTIVITÉ', detail: 'Équipe complète', fixed: true },
-  { id: 'yesterday-4', dayOffset: 1, time: '15:52', type: 'FIN ACTIVITÉ', detail: 'Équipe complète', fixed: true },
-  { id: 'yesterday-3', dayOffset: 1, time: '12:40', type: 'DÉBUT ACTIVITÉ', detail: 'Reprise après pause', fixed: true },
-  { id: 'yesterday-2', dayOffset: 1, time: '12:01', type: 'PAUSE', detail: 'Équipe complète', fixed: true },
-  { id: 'yesterday-1', dayOffset: 1, time: '07:28', type: 'DÉBUT ACTIVITÉ', detail: 'Équipe complète', fixed: true },
-  { id: 'older-4', dayOffset: 2, time: '16:03', type: 'FIN ACTIVITÉ', detail: 'Équipe complète', fixed: true },
-  { id: 'older-3', dayOffset: 2, time: '12:38', type: 'DÉBUT ACTIVITÉ', detail: 'Reprise après pause', fixed: true },
-  { id: 'older-2', dayOffset: 2, time: '12:04', type: 'PAUSE', detail: 'Équipe complète', fixed: true },
-  { id: 'older-1', dayOffset: 2, time: '07:31', type: 'DÉBUT ACTIVITÉ', detail: 'Équipe complète', fixed: true },
-]
-
 const FILES = [
-  { id: 'quote', label: 'Devis signé', meta: 'Document PDF', icon: 'file', status: 'SIGNÉ', primary: true },
+  { id: 'quote', label: 'Devis', meta: 'Document PDF', icon: 'file', status: 'PDF', primary: true },
   { id: 'overview', label: 'Infos chantier', meta: 'Client, contacts et consignes', icon: 'info', status: 'À JOUR' },
   { id: 'photos', label: 'Photos chantier', meta: '28 photos · ajout rapide', icon: 'camera', status: '28' },
   { id: 'plans', label: 'Plans techniques', meta: '6 documents disponibles', icon: 'plan', status: '6' },
@@ -114,49 +92,8 @@ function dateToday() {
     .toUpperCase()
 }
 
-function historyDateLabel(dayOffset) {
-  const date = new Date()
-  date.setDate(date.getDate() - dayOffset)
-  const formatted = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' }).format(date)
-  if (dayOffset === 0) return `Aujourd’hui · ${formatted}`
-  if (dayOffset === 1) return `Hier · ${formatted}`
-  return formatted
-}
-
 function googleMapsUrl(address) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
-}
-
-function minutesFromTime(time) {
-  const [hours, minutes] = time.split(':').map(Number)
-  return (hours * 60) + minutes
-}
-
-function formatWorkedTime(events, timestamp) {
-  const chronological = events
-    .filter((event) => (event.dayOffset ?? 0) === 0)
-    .sort((a, b) => minutesFromTime(a.time) - minutesFromTime(b.time))
-  let activeSince = null
-  let totalMinutes = 0
-
-  chronological.forEach((event) => {
-    const eventMinutes = minutesFromTime(event.time)
-    if (event.type === 'DÉBUT ACTIVITÉ' && activeSince === null) activeSince = eventMinutes
-    if ((event.type === 'PAUSE' || event.type === 'FIN ACTIVITÉ') && activeSince !== null) {
-      totalMinutes += Math.max(0, eventMinutes - activeSince)
-      activeSince = null
-    }
-  })
-
-  if (activeSince !== null) {
-    const current = new Date(timestamp)
-    const currentMinutes = (current.getHours() * 60) + current.getMinutes()
-    totalMinutes += Math.max(0, Math.min(currentMinutes, (16 * 60) + 30) - activeSince)
-  }
-
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = String(totalMinutes % 60).padStart(2, '0')
-  return `${hours} h ${minutes}`
 }
 
 function Icon({ name, size = 20 }) {
@@ -192,7 +129,7 @@ function Header({ site, clock, todayLabel, openSiteSelector }) {
       <div className="header-spacer" />
       <span className="sync-check" title="Synchronisé"><Icon name="check" size={15} /></span>
       <div className="erp-clock"><strong>{clock}</strong><span>{todayLabel}</span></div>
-      <button className="user-code" aria-label="Profil de Thomas Muller">TM</button>
+      <button className="user-code" aria-label="Profil de Jocelin Saur">JS</button>
     </header>
   )
 }
@@ -221,10 +158,9 @@ function SiteContext({ site, flash, openFile }) {
           <div><span>PROCHAIN GRUTAGE</span><strong>{NEXT_LIFTING.when}</strong><em>{NEXT_LIFTING.truck}</em></div>
           <Icon name="arrow" size={15} />
         </button>
-        <a className="quote-shortcut" href="/documents/devis-2025-0847.pdf" target="_blank" rel="noreferrer" aria-label="Ouvrir directement le devis signé au format PDF">
+        <a className="quote-shortcut" href="/documents/devis-2025-0847.pdf" target="_blank" rel="noreferrer" aria-label="Ouvrir directement le devis au format PDF">
           <span className="essential-icon"><Icon name="file" size={19} /></span>
-          <div><span>DEVIS SIGNÉ</span><strong>Ouvrir le document PDF</strong></div>
-          <em>1 CLIC</em>
+          <div><span>DEVIS</span><strong>Ouvrir le PDF</strong></div>
           <Icon name="arrow" size={15} />
         </a>
       </div>
@@ -232,23 +168,12 @@ function SiteContext({ site, flash, openFile }) {
   )
 }
 
-function ActionPanel({ events, onAction, onUndo, now, presentCount, todayLabel }) {
-  const latest = events[0]
-  const remaining = latest?.undoUntil ? Math.max(0, Math.ceil((latest.undoUntil - now) / 1000)) : 0
-  const workedTime = formatWorkedTime(events, now)
-  const todayEvents = events.filter((event) => (event.dayOffset ?? 0) === 0)
-  const historyGroups = [...new Set(events.map((event) => event.dayOffset ?? 0))]
-    .sort((a, b) => a - b)
-    .map((dayOffset) => ({
-      dayOffset,
-      events: events.filter((event) => (event.dayOffset ?? 0) === dayOffset),
-    }))
-
+function ActionPanel({ onAction, targetLabel }) {
   return (
     <section className="erp-panel actions-panel">
       <header className="panel-header">
-        <div><span>POINTAGE</span><h2>Actions chantier</h2></div>
-        <div className="pointage-team-count"><Icon name="people" size={16} /><strong>{presentCount}</strong><span>PRÉSENTS</span></div>
+        <div><span>POINTAGE</span><h2>Choisir une action</h2></div>
+        <div className="pointage-target"><span>POUR</span><strong>{targetLabel}</strong></div>
       </header>
       <div className="action-grid">
         {ACTIONS.map((action) => (
@@ -257,78 +182,41 @@ function ActionPanel({ events, onAction, onUndo, now, presentCount, todayLabel }
           </button>
         ))}
       </div>
-      <div className="history-head">
-        <div className="history-title"><Icon name="history" size={18} /><div><strong>HISTORIQUE DES POINTAGES</strong><span>{todayLabel}</span></div></div>
-        <div className="history-metrics">
-          <div><strong>{todayEvents.length}</strong><span>POINTAGES AUJOURD’HUI</span></div>
-          <div><strong>{workedTime}</strong><span>HEURES AUJOURD’HUI</span></div>
-        </div>
-      </div>
-      <div className="history-list">
-        {historyGroups.map((group) => (
-          <div className="history-day" key={group.dayOffset}>
-            <div className="history-date-bar">
-              <strong>{historyDateLabel(group.dayOffset)}</strong>
-              <span>{group.events.length} pointages</span>
-            </div>
-            {group.events.map((event) => (
-              <div className="history-row" key={event.id}>
-                <time>{event.time}</time>
-                <span className="history-type">{event.type}</span>
-                <span className="history-detail">{event.detail}</span>
-                <span className="event-check"><Icon name="check" size={13} /></span>
-                {event.id === latest?.id && remaining > 0 && <button className="undo-button" onClick={onUndo}>ANNULER · {remaining}s</button>}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
     </section>
   )
 }
 
-function TeamPanel({ team, togglePresence, removeMember, openAdd, openPlanning }) {
-  const present = team.filter((member) => member.present).length
+function TeamPanel({ team, selectedTarget, selectTarget }) {
   return (
     <section className="erp-panel team-panel">
       <header className="panel-header team-header">
-        <div><span>ÉQUIPE</span><h2>{present} présents / {team.length}</h2></div>
-        <button className="add-button" onClick={openAdd}><Icon name="plus" size={17} />AJOUTER</button>
+        <div><span>ÉQUIPE DU JOUR</span><h2>Qui pointer ?</h2></div>
+        <span className="team-count">{team.length} PERSONNES</span>
       </header>
-      <div className="vehicle-line"><span>VÉHICULE</span><strong>Renault Trafic · FM-637-SA</strong></div>
-      <div className="team-list">
+      <button
+        className={`whole-team-target ${selectedTarget === 'team' ? 'is-selected' : ''}`}
+        onClick={() => selectTarget('team')}
+        aria-pressed={selectedTarget === 'team'}
+      >
+        <span className="team-target-icon"><Icon name="people" size={20} /></span>
+        <div><strong>Toute l’équipe</strong><span>Pointer les {team.length} personnes</span></div>
+        <span className="selection-check"><Icon name="check" size={14} /></span>
+      </button>
+      <div className="team-target-grid">
         {team.map((member) => (
-          <div className="team-row" key={member.id}>
-            <span className="employee-code">{member.code}</span>
-            <div><strong>{member.name}</strong><span>{member.role}</span></div>
-            <button className={`presence-toggle ${member.present ? 'is-present' : ''}`} onClick={() => togglePresence(member.id)}>{member.present ? 'PRÉSENT' : 'ABSENT'}</button>
-            <button className="remove-person" onClick={() => removeMember(member.id)} aria-label={`Enlever ${member.name}`}><Icon name="close" size={18} /></button>
-          </div>
+          <button
+            className={`person-target ${selectedTarget === member.id ? 'is-selected' : ''}`}
+            key={member.id}
+            onClick={() => selectTarget(member.id)}
+            aria-pressed={selectedTarget === member.id}
+          >
+            <span className="person-initials">{member.initials}</span>
+            <strong>{member.name}</strong>
+            <span className="selection-check"><Icon name="check" size={13} /></span>
+          </button>
         ))}
-      </div>
-      <div className="team-movements">
-        <div className="movements-heading"><span>PROCHAIN MOUVEMENT</span><button onClick={openPlanning}>VOIR LE PLANNING <Icon name="arrow" size={14} /></button></div>
-        <button className="next-movement" onClick={openPlanning}>
-          <div className="movement-date"><span>DEMAIN</span><time>07:00</time></div>
-          <div className="movement-copy"><span>RENFORT D’ÉQUIPE</span><strong>Lina Martin rejoint le chantier</strong><em>Couvreuse · présente dès le démarrage</em></div>
-          <Icon name="arrow" size={17} />
-        </button>
-        <button className="later-movement" onClick={openPlanning}><time>VEN.</time><strong>FORMATION</strong><em>Kévin Renaud indisponible</em><Icon name="arrow" size={14} /></button>
       </div>
     </section>
-  )
-}
-
-function AddPeopleDrawer({ available, addMember, close }) {
-  return (
-    <Drawer title="Ajouter une personne" subtitle="Personnel disponible" close={close}>
-      <div className="available-list">
-        {available.map((member) => (
-          <div className="available-person" key={member.id}><span>{member.code}</span><div><strong>{member.name}</strong><em>{member.role}</em></div><button onClick={() => addMember(member.id)}><Icon name="plus" size={17} />AJOUTER</button></div>
-        ))}
-        {!available.length && <p className="empty-state">Aucune autre personne disponible.</p>}
-      </div>
-    </Drawer>
   )
 }
 
@@ -344,32 +232,11 @@ function SiteDrawer({ site, selectSite, close }) {
   )
 }
 
-function PlanningDrawer({ close }) {
-  const rows = [
-    { day: 'MAR. 22', time: '07:00 — 16:30', site: '112430 · Labaroche', people: 'Thomas · Yann · Sofiane · Kévin', current: true },
-    { day: 'MER. 23', time: '07:00 — 16:00', site: '112518 · Colmar', people: 'Thomas · Yann · Lina' },
-    { day: 'JEU. 24', time: '07:00 — 15:30', site: '112518 · Colmar', people: 'Thomas · Yann · Lina' },
-    { day: 'VEN. 25', time: '07:30 — 16:00', site: '112387 · Kaysersberg', people: 'Sofiane · Kévin · Noé' },
-  ]
-  return (
-    <Drawer title="Planning de l’équipe" subtitle="Semaine 30 · affectations" close={close}>
-      <div className="week-list">{rows.map((row) => (
-        <div className={`week-row ${row.current ? 'current' : ''}`} key={row.day}>
-          <div><span>{row.day}</span>{row.current && <em>AUJOURD’HUI</em>}</div>
-          <time>{row.time}</time>
-          <strong>Chantier {row.site}</strong>
-          <p><Icon name="people" size={14} />{row.people}</p>
-        </div>
-      ))}</div>
-    </Drawer>
-  )
-}
-
 function FileDrawer({ fileId, site, close, flash }) {
   const file = FILES.find((item) => item.id === fileId) ?? FILES[0]
   const content = {
     overview: <div className="info-table"><div><span>CLIENT</span><strong>{site.client}</strong></div><div><span>CONDUCTEUR</span><strong>{site.manager}</strong></div><div><span>COMMANDE</span><strong>17/11/2025</strong></div><div><span>STATUT</span><strong>En cours</strong></div><p>Protéger la terrasse avant dépose. Le client est absent entre 11:30 et 14:00.</p></div>,
-    quote: <div className="document-summary"><span>DEVIS 2025-0847 · SIGNÉ</span><strong>Document chantier</strong><p>PDF disponible · dernière mise à jour le 18/07/2026</p><a href="/documents/devis-2025-0847.pdf" target="_blank" rel="noreferrer">OUVRIR LE PDF</a></div>,
+    quote: <div className="document-summary"><span>DEVIS 2025-0847</span><strong>Document chantier</strong><p>PDF disponible · dernière mise à jour le 18/07/2026</p><a href="/documents/devis-2025-0847.pdf" target="_blank" rel="noreferrer">OUVRIR LE PDF</a></div>,
     photos: <div className="photo-grid"><button onClick={() => flash('Photo avant travaux ouverte')}>AVANT TRAVAUX</button><button onClick={() => flash('Photo versant nord ouverte')}>VERSANT NORD</button><button onClick={() => flash('Photo zinguerie ouverte')}>ZINGUERIE</button><button onClick={() => flash('Appareil photo prêt')}>+ AJOUTER UNE PHOTO</button></div>,
     delivery: <div className="info-table"><div><span>FOURNISSEUR</span><strong>VMZINC</strong></div><div><span>CRÉNEAU</span><strong>Aujourd’hui 13:30</strong></div><div><span>RÉFÉRENCE</span><strong>BL-45518</strong></div><div><span>STATUT</span><strong>Confirmée</strong></div><p>Déchargement dans la cour arrière. Laisser libre l’accès au garage.</p></div>,
     lifting: (
@@ -416,40 +283,24 @@ function Drawer({ title, subtitle, close, children }) {
 
 export default function App() {
   const [siteId, setSiteId] = useState('112430')
-  const [team, setTeam] = useState(INITIAL_TEAM)
-  const [available, setAvailable] = useState(INITIAL_AVAILABLE)
-  const [events, setEvents] = useState(INITIAL_EVENTS)
+  const [selectedTarget, setSelectedTarget] = useState('team')
   const [drawer, setDrawer] = useState(null)
   const [fileId, setFileId] = useState(null)
   const [toast, setToast] = useState('')
   const [clock, setClock] = useState(timeNow())
-  const [now, setNow] = useState(Date.now())
 
   const site = useMemo(() => SITES.find((item) => item.id === siteId) ?? SITES[0], [siteId])
-  const presentCount = useMemo(() => team.filter((member) => member.present).length, [team])
-  const latestUndoUntil = events[0]?.undoUntil ?? 0
+  const targetLabel = selectedTarget === 'team'
+    ? `Toute l’équipe · ${INITIAL_TEAM.length}`
+    : INITIAL_TEAM.find((member) => member.id === selectedTarget)?.name ?? 'Toute l’équipe'
   const todayLabel = dateToday()
 
   useEffect(() => {
     const clockTimer = window.setInterval(() => {
       setClock(timeNow())
-      setNow(Date.now())
     }, 30_000)
     return () => window.clearInterval(clockTimer)
   }, [])
-
-  useEffect(() => {
-    if (!latestUndoUntil || latestUndoUntil <= Date.now()) return undefined
-    let undoTimer
-    const tick = () => {
-      const current = Date.now()
-      setNow(current)
-      if (current >= latestUndoUntil) window.clearInterval(undoTimer)
-    }
-    tick()
-    undoTimer = window.setInterval(tick, 1_000)
-    return () => window.clearInterval(undoTimer)
-  }, [latestUndoUntil])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -458,44 +309,7 @@ export default function App() {
   }, [toast])
 
   function recordAction(action) {
-    const event = {
-      id: `${Date.now()}-${action.id}`,
-      dayOffset: 0,
-      time: timeNow(),
-      type: action.short,
-      detail: `${presentCount} personnes · ${site.id}`,
-      undoUntil: Date.now() + 60_000,
-    }
-    setEvents((current) => [event, ...current])
-    setNow(Date.now())
-    setToast(`${action.label} enregistré`)
-  }
-
-  function undoLatest() {
-    const latest = events[0]
-    if (!latest?.undoUntil || latest.undoUntil <= Date.now()) return
-    setEvents((current) => current.slice(1))
-    setToast(`${latest.type} annulé`)
-  }
-
-  function togglePresence(id) {
-    setTeam((current) => current.map((member) => member.id === id ? { ...member, present: !member.present } : member))
-  }
-
-  function removeMember(id) {
-    const member = team.find((item) => item.id === id)
-    if (!member) return
-    setTeam((current) => current.filter((item) => item.id !== id))
-    setAvailable((current) => [...current, member])
-    setToast(`${member.name} enlevé du chantier`)
-  }
-
-  function addMember(id) {
-    const member = available.find((item) => item.id === id)
-    if (!member) return
-    setAvailable((current) => current.filter((item) => item.id !== id))
-    setTeam((current) => [...current, { ...member, present: true }])
-    setToast(`${member.name} ajouté au chantier`)
+    setToast(`${action.label} · ${targetLabel} · ${timeNow()}`)
   }
 
   function selectSite(id) {
@@ -513,12 +327,11 @@ export default function App() {
     <div className="app-shell">
       <Header site={site} clock={clock} todayLabel={todayLabel} openSiteSelector={() => setDrawer('site')} />
       <main className="erp-dashboard">
+        <TeamPanel team={INITIAL_TEAM} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} />
+        <ActionPanel onAction={recordAction} targetLabel={targetLabel} />
         <SiteContext site={site} flash={setToast} openFile={openFile} />
-        <div className="main-grid"><ActionPanel events={events} onAction={recordAction} onUndo={undoLatest} now={now} presentCount={presentCount} todayLabel={todayLabel} /><TeamPanel team={team} togglePresence={togglePresence} removeMember={removeMember} openAdd={() => setDrawer('add')} openPlanning={() => setDrawer('planning')} /></div>
       </main>
-      {drawer === 'add' && <AddPeopleDrawer available={available} addMember={addMember} close={() => setDrawer(null)} />}
       {drawer === 'site' && <SiteDrawer site={site} selectSite={selectSite} close={() => setDrawer(null)} />}
-      {drawer === 'planning' && <PlanningDrawer close={() => setDrawer(null)} />}
       {drawer === 'file' && <FileDrawer fileId={fileId} site={site} close={() => setDrawer(null)} flash={setToast} />}
       {toast && <div className="toast" role="status"><span className="green-check"><Icon name="check" size={13} /></span>{toast}</div>}
     </div>

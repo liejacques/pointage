@@ -4,13 +4,12 @@ Cockpit React/Vite de pointage chantier Aetheris. L’interface s’adapte au t�
 
 Fonctions disponibles :
 
-- actions de pointage avec annulation de la dernière saisie pendant 60 secondes ;
-- historique groupé par date avec cumul du jour ;
-- gestion des présences et ajout ou retrait d’un compagnon ;
-- prochain mouvement d’équipe mis en avant ;
+- choix immédiat entre toute l’équipe et une personne précise avant le pointage ;
+- équipe du jour affichée en premier sur téléphone, sans métier ni spécialité ;
+- actions de pointage accessibles sans défilement sur un écran mobile courant ;
 - accès direct à Google Maps depuis l’adresse du chantier ;
 - accès direct aux prévisions Météo-France du lieu ;
-- ouverture du devis PDF en un clic ;
+- ouverture directe du devis PDF ;
 - fiche de grutage avec chauffeur, téléphone, camion, capacité et chargement prévu ;
 - changement manuel de chantier.
 
@@ -32,4 +31,4 @@ npm run build
 
 Le projet est compatible avec un déploiement Vercel standard pour une application Vite.
 
-Les données de cette maquette sont fictives. Les liens Google Maps et Météo-France ainsi que les liens téléphoniques ouvrent désormais les services correspondants. Le devis fourni est un document de démonstration à remplacer par le PDF signé réel.
+Les données de cette maquette sont fictives. Les liens Google Maps et Météo-France ainsi que les liens téléphoniques ouvrent les services correspondants. Le devis fourni est un document de démonstration à remplacer par le document réel.
