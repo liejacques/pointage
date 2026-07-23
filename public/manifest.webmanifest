@@ -1,0 +1,19 @@
+{
+  "name": "Aetheris Pointage & Chantiers",
+  "short_name": "Aetheris",
+  "description": "Pointage terrain et conduite de travaux Aetheris",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e9ece9",
+  "theme_color": "#1e3039",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/aetheris-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

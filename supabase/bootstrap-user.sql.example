@@ -1,0 +1,11 @@
+-- À exécuter après avoir créé l'utilisateur dans Supabase Auth.
+-- Remplacer les deux valeurs ci-dessous, puis ne jamais committer le fichier rempli.
+update public.profils
+set
+  entreprise_id = '10000000-0000-0000-0000-000000000001',
+  role = 'conducteur',
+  nom_complet = 'Nom du conducteur',
+  initiales = 'NC',
+  actif = true
+where id = 'UUID_AUTH_A_REMPLACER';
+

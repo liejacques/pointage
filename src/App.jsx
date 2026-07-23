@@ -1,4 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  deleteAssignment,
+  flushPunchQueue,
+  loadTerrainData,
+  localDate,
+  openSiteDocument,
+  recordPunches,
+  saveAssignment,
+  updateAssignment,
+  updateAssignments,
+} from './services/aetherisApi'
 
 const SITES = [
   {
@@ -137,7 +148,7 @@ function Icon({ name, size = 20 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>
 }
 
-function Header({ site, clock, todayLabel, openSiteSelector }) {
+function Header({ site, clock, todayLabel, openSiteSelector, profile, onLogout }) {
   return (
     <header className="erp-header">
       <div className="erp-brand"><span className="erp-mark" />AETHERIS <b>TERRAIN</b></div>
@@ -147,12 +158,12 @@ function Header({ site, clock, todayLabel, openSiteSelector }) {
       <div className="header-spacer" />
       <span className="sync-check" title="Synchronisé"><Icon name="check" size={15} /></span>
       <div className="erp-clock"><strong>{clock}</strong><span>{todayLabel}</span></div>
-      <button className="user-code" aria-label="Profil de Jocelin Saur">JS</button>
+      <button className="user-code" onClick={onLogout} aria-label={onLogout ? 'Se déconnecter' : 'Profil de Jocelin Saur'}>{profile?.initiales || 'JS'}</button>
     </header>
   )
 }
 
-function SiteContext({ site, flash, openFile }) {
+function SiteContext({ site, flash, openFile, openQuote, lifting = NEXT_LIFTING }) {
   const hasRain = site.rainAmount !== '0 mm'
   return (
     <section className="site-context">
@@ -173,14 +184,14 @@ function SiteContext({ site, flash, openFile }) {
         </a>
         <button className="essential-row" onClick={() => openFile('lifting')}>
           <span className="essential-icon"><Icon name="crane" size={20} /></span>
-          <div><span>PROCHAIN GRUTAGE</span><strong>{NEXT_LIFTING.when}</strong><em>{NEXT_LIFTING.truck}</em></div>
+          <div><span>PROCHAIN GRUTAGE</span><strong>{lifting.when}</strong><em>{lifting.truck}</em></div>
           <Icon name="arrow" size={15} />
         </button>
-        <a className="quote-shortcut" href="/documents/devis-2025-0847.pdf" target="_blank" rel="noreferrer" aria-label="Ouvrir directement le devis au format PDF">
+        <button className="quote-shortcut" onClick={openQuote} aria-label="Ouvrir directement le devis au format PDF">
           <span className="essential-icon"><Icon name="file" size={19} /></span>
           <div><span>DEVIS</span><strong>Ouvrir le PDF</strong></div>
           <Icon name="arrow" size={15} />
-        </a>
+        </button>
       </div>
     </section>
   )
@@ -215,6 +226,7 @@ function TeamPanel({
   togglePresence,
   removeMember,
   addMember,
+  vehicles = VEHICLES,
 }) {
   const [mode, setMode] = useState('current')
   const [showVehicle, setShowVehicle] = useState(false)
@@ -260,7 +272,7 @@ function TeamPanel({
         {showVehicle && (
           <label className="vehicle-selector">
             <span className="management-icon"><Icon name="truck" size={18} /></span>
-            <div><span>VÉHICULE AFFECTÉ</span><select value={vehicleId} onChange={(event) => changeVehicle(event.target.value)}>{VEHICLES.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.label}</option>)}</select></div>
+            <div><span>VÉHICULE AFFECTÉ</span><select value={vehicleId} onChange={(event) => changeVehicle(event.target.value)}>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.label}</option>)}</select></div>
           </label>
         )}
         <button className={`current-target-all ${selectedTarget === 'team' ? 'is-selected' : ''}`} onClick={() => selectTarget('team')} disabled={!presentTeam.length} aria-pressed={selectedTarget === 'team'}>
@@ -287,11 +299,11 @@ function TeamPanel({
   )
 }
 
-function SiteDrawer({ site, selectSite, close }) {
+function SiteDrawer({ site, sites = SITES, selectSite, close }) {
   return (
     <Drawer title="Sélectionner un chantier" subtitle="Option manuelle" close={close}>
       <div className="site-list">
-        {SITES.map((item) => (
+        {sites.map((item) => (
           <button className={item.id === site.id ? 'selected' : ''} key={item.id} onClick={() => selectSite(item.id)}><span>{item.id}</span><div><strong>{item.title}</strong><em>{item.city} · {item.client}</em></div>{item.id === site.id && <span className="small-check"><Icon name="check" size={14} /></span>}</button>
         ))}
       </div>
@@ -299,7 +311,7 @@ function SiteDrawer({ site, selectSite, close }) {
   )
 }
 
-function FileDrawer({ fileId, site, close, flash }) {
+function FileDrawer({ fileId, site, close, flash, lifting = NEXT_LIFTING }) {
   const file = FILES.find((item) => item.id === fileId) ?? FILES[0]
   const content = {
     overview: <div className="info-table"><div><span>CLIENT</span><strong>{site.client}</strong></div><div><span>CONDUCTEUR</span><strong>{site.manager}</strong></div><div><span>COMMANDE</span><strong>17/11/2025</strong></div><div><span>STATUT</span><strong>En cours</strong></div><p>Protéger la terrasse avant dépose. Le client est absent entre 11:30 et 14:00.</p></div>,
@@ -310,24 +322,24 @@ function FileDrawer({ fileId, site, close, flash }) {
       <div className="lifting-detail">
         <div className="lifting-summary">
           <span className="lifting-icon"><Icon name="crane" size={26} /></span>
-          <div><span>PROCHAIN GRUTAGE</span><strong>{NEXT_LIFTING.when}</strong><em>{NEXT_LIFTING.company}</em></div>
+          <div><span>PROCHAIN GRUTAGE</span><strong>{lifting.when}</strong><em>{lifting.company}</em></div>
         </div>
         <div className="lifting-vehicle">
           <span>CAMION ET CAPACITÉ</span>
-          <strong>{NEXT_LIFTING.truck}</strong>
-          <p>{NEXT_LIFTING.capacity} · intervention prévue {NEXT_LIFTING.duration}</p>
+          <strong>{lifting.truck}</strong>
+          <p>{lifting.capacity} · intervention prévue {lifting.duration}</p>
         </div>
         <div className="driver-card">
-          <div><span>CHAUFFEUR</span><strong>{NEXT_LIFTING.driver}</strong><em>{NEXT_LIFTING.phone ? 'Numéro disponible' : 'Numéro non communiqué'}</em></div>
-          {NEXT_LIFTING.phone ? (
-            <a href={`tel:${NEXT_LIFTING.phone.replace(/\s/g, '')}`}><Icon name="phone" size={18} /><span>APPELER</span><strong>{NEXT_LIFTING.phone}</strong></a>
+          <div><span>CHAUFFEUR</span><strong>{lifting.driver}</strong><em>{lifting.phone ? 'Numéro disponible' : 'Numéro non communiqué'}</em></div>
+          {lifting.phone ? (
+            <a href={`tel:${lifting.phone.replace(/\s/g, '')}`}><Icon name="phone" size={18} /><span>APPELER</span><strong>{lifting.phone}</strong></a>
           ) : (
             <div className="driver-unavailable"><Icon name="phone" size={18} /><span>CONTACT</span><strong>NON COMMUNIQUÉ</strong></div>
           )}
         </div>
         <div className="cargo-section">
-          <div><span>CHARGEMENT PRÉVU</span><strong>{NEXT_LIFTING.cargo.length} éléments à réceptionner</strong></div>
-          <ul>{NEXT_LIFTING.cargo.map((item) => <li key={item}><Icon name="check" size={14} />{item}</li>)}</ul>
+          <div><span>CHARGEMENT PRÉVU</span><strong>{lifting.cargo.length} éléments à réceptionner</strong></div>
+          <ul>{lifting.cargo.map((item) => <li key={item}><Icon name="check" size={14} />{item}</li>)}</ul>
         </div>
         <p className="lifting-note">Accès par la cour arrière. Garder la zone de stabilisation libre avant 08:00.</p>
       </div>
@@ -348,23 +360,63 @@ function Drawer({ title, subtitle, close, children }) {
   )
 }
 
-export default function App() {
+export default function App({ profile = null, onLogout = null }) {
   const [siteId, setSiteId] = useState('112430')
+  const [sites, setSites] = useState(SITES)
   const [team, setTeam] = useState(INITIAL_TEAM)
   const [available, setAvailable] = useState(INITIAL_AVAILABLE)
   const [vehicleId, setVehicleId] = useState(VEHICLES[0].id)
+  const [vehicles, setVehicles] = useState(VEHICLES)
+  const [terrainData, setTerrainData] = useState(null)
   const [selectedTarget, setSelectedTarget] = useState('team')
   const [drawer, setDrawer] = useState(null)
   const [fileId, setFileId] = useState(null)
   const [toast, setToast] = useState('')
   const [clock, setClock] = useState(timeNow())
 
-  const site = useMemo(() => SITES.find((item) => item.id === siteId) ?? SITES[0], [siteId])
+  const site = useMemo(() => sites.find((item) => item.id === siteId) ?? sites[0] ?? SITES[0], [siteId, sites])
   const presentTeam = useMemo(() => team.filter((member) => member.present), [team])
   const targetLabel = selectedTarget === 'team'
     ? `Toute l’équipe · ${presentTeam.length}`
     : team.find((member) => member.id === selectedTarget)?.name ?? 'Toute l’équipe'
   const todayLabel = dateToday()
+  const nextLifting = useMemo(() => {
+    const operation = terrainData?.logistics.find((item) => item.chantier_id === site.dbId && item.type_operation === 'grutage')
+    if (!operation) return NEXT_LIFTING
+    return {
+      when: new Intl.DateTimeFormat('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(operation.debut_prevu)),
+      company: operation.fournisseur || 'Prestataire non communiqué',
+      driver: operation.chauffeur_nom || 'Non communiqué',
+      phone: operation.chauffeur_telephone,
+      truck: operation.vehicules ? `${operation.vehicules.libelle} · ${operation.vehicules.immatriculation || ''}` : operation.camion_externe || 'Camion non communiqué',
+      capacity: operation.capacite || 'Capacité non communiquée',
+      duration: 'selon planning',
+      cargo: operation.chargement || [],
+    }
+  }, [terrainData, site.dbId])
+
+  function applySiteTeam(reference, data = terrainData) {
+    if (!data) return
+    const backendSite = data.assignments.find((item) => item.chantiers?.reference === reference)?.chantiers
+    if (!backendSite) return
+    const assignments = data.assignments.filter((item) => item.chantier_id === backendSite.id)
+    const assignedIds = new Set(assignments.map((item) => item.compagnon_id))
+    setTeam(assignments.map((item) => ({
+      id: item.compagnon_id,
+      assignmentId: item.id,
+      name: item.compagnons?.nom_complet,
+      initials: item.compagnons?.initiales,
+      present: item.inclus_pointage,
+    })))
+    setAvailable(data.people.filter((person) => !assignedIds.has(person.id)).map((person) => ({
+      id: person.id,
+      name: person.nom_complet,
+      initials: person.initiales,
+      present: true,
+    })))
+    setVehicleId(assignments.find((item) => item.vehicule_id)?.vehicule_id || 'none')
+    setSelectedTarget('team')
+  }
 
   useEffect(() => {
     const clockTimer = window.setInterval(() => {
@@ -374,46 +426,141 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (!profile) return undefined
+    let active = true
+    loadTerrainData()
+      .then((data) => {
+        if (!active) return
+        const backendSites = [...new Map(data.assignments.map((item) => [item.chantier_id, item.chantiers])).values()]
+          .filter(Boolean)
+          .map((item) => ({
+            id: item.reference,
+            dbId: item.id,
+            title: item.nom,
+            city: item.ville,
+            address: [item.adresse, item.code_postal, item.ville].filter(Boolean).join(', '),
+            client: item.client_nom || 'Client chantier',
+            manager: 'Conducteur de travaux',
+            rain: 'Voir les prévisions',
+            rainTime: 'Prévisions locales',
+            rainAmount: '0 mm',
+            weatherUrl: item.meteo_url || `https://meteofrance.com/previsions-meteo-france/${encodeURIComponent(item.ville)}/${item.code_postal || ''}`,
+          }))
+        if (backendSites.length) {
+          setSites(backendSites)
+          setSiteId(backendSites[0].id)
+        }
+        setVehicles([
+          ...data.vehicles.map((item) => ({ id: item.id, label: `${item.libelle}${item.immatriculation ? ` · ${item.immatriculation}` : ''}` })),
+          { id: 'none', label: 'Aucun véhicule affecté' },
+        ])
+        setTerrainData(data)
+        if (backendSites[0]) applySiteTeam(backendSites[0].id, data)
+        flushPunchQueue()
+      })
+      .catch((error) => setToast(error.message))
+
+    const reconnect = () => flushPunchQueue().then((remaining) => {
+      if (!remaining) setToast('Pointages en attente synchronisés')
+    })
+    window.addEventListener('online', reconnect)
+    return () => {
+      active = false
+      window.removeEventListener('online', reconnect)
+    }
+  }, [profile?.id])
+
+  useEffect(() => {
     if (!toast) return undefined
     const timer = window.setTimeout(() => setToast(''), 2_300)
     return () => window.clearTimeout(timer)
   }, [toast])
 
-  function recordAction(action) {
+  async function recordAction(action) {
     if (!presentTeam.length) {
       setToast('Aucune personne cochée à pointer')
       return
     }
-    setToast(`${action.label} · ${targetLabel} · ${timeNow()}`)
+    if (!profile || !terrainData || !site.dbId) {
+      setToast(`${action.label} · ${targetLabel} · ${timeNow()}`)
+      return
+    }
+    const actionMap = {
+      start: 'debut_activite',
+      fabrication: 'faconnage',
+      pause: 'pause',
+      finish: 'fin_activite',
+      instruction: 'consigne',
+      meeting: 'reunion',
+      materials: 'enlevement_materiaux',
+    }
+    const people = selectedTarget === 'team'
+      ? presentTeam.map((member) => member.id)
+      : [selectedTarget]
+    try {
+      const result = await recordPunches({ personIds: people, siteId: site.dbId, action: actionMap[action.id] })
+      setToast(result.queued ? `${result.queued} pointage(s) gardé(s) hors connexion` : `${action.label} · ${targetLabel} · ${timeNow()}`)
+    } catch (error) {
+      setToast(error.message)
+    }
   }
 
-  function togglePresence(id) {
+  async function togglePresence(id) {
     const member = team.find((person) => person.id === id)
     if (!member) return
     setTeam((current) => current.map((person) => person.id === id ? { ...person, present: !person.present } : person))
     if (selectedTarget === id && member.present) setSelectedTarget('team')
     setToast(`${member.name} · ${member.present ? 'décoché' : 'coché'}`)
+    if (profile && member.assignmentId) {
+      try {
+        await updateAssignment(member.assignmentId, { inclus_pointage: !member.present })
+      } catch (error) {
+        setToast(error.message)
+      }
+    }
   }
 
-  function removeMember(id) {
+  async function removeMember(id) {
     const member = team.find((person) => person.id === id)
     if (!member) return
     setTeam((current) => current.filter((person) => person.id !== id))
     setAvailable((current) => [...current, { ...member, present: true }])
     if (selectedTarget === id) setSelectedTarget('team')
     setToast(`${member.name} retiré de l’équipe`)
+    if (profile && member.assignmentId) {
+      try {
+        await deleteAssignment(member.assignmentId)
+      } catch (error) {
+        setToast(error.message)
+      }
+    }
   }
 
-  function addMember(id) {
+  async function addMember(id) {
     const member = available.find((person) => person.id === id)
     if (!member) return
     setAvailable((current) => current.filter((person) => person.id !== id))
     setTeam((current) => [...current, { ...member, present: true }])
     setToast(`${member.name} ajouté à l’équipe`)
+    if (profile && site.dbId) {
+      try {
+        await saveAssignment({
+          entrepriseId: profile.entreprise_id,
+          siteId: site.dbId,
+          personId: member.id,
+          vehicleId: vehicleId === 'none' ? null : vehicleId,
+          date: localDate(),
+          userId: profile.id,
+        })
+      } catch (error) {
+        setToast(error.message)
+      }
+    }
   }
 
   function selectSite(id) {
     setSiteId(id)
+    applySiteTeam(id)
     setDrawer(null)
     setToast(`Chantier ${id} sélectionné`)
   }
@@ -423,16 +570,40 @@ export default function App() {
     setDrawer('file')
   }
 
+  async function changeVehicle(id) {
+    setVehicleId(id)
+    if (!profile) return
+    try {
+      await updateAssignments(team.map((member) => member.assignmentId).filter(Boolean), { vehicule_id: id === 'none' ? null : id })
+      setToast('Véhicule de l’équipe mis à jour')
+    } catch (error) {
+      setToast(error.message)
+    }
+  }
+
+  async function openQuote() {
+    const quote = terrainData?.documents.find((item) => item.chantier_id === site.dbId && item.type_document === 'devis')
+    if (!quote) {
+      window.open('/documents/devis-2025-0847.pdf', '_blank', 'noopener,noreferrer')
+      return
+    }
+    try {
+      await openSiteDocument(quote.storage_path)
+    } catch (error) {
+      setToast(error.message)
+    }
+  }
+
   return (
     <div className="app-shell">
-      <Header site={site} clock={clock} todayLabel={todayLabel} openSiteSelector={() => setDrawer('site')} />
+      <Header site={site} clock={clock} todayLabel={todayLabel} openSiteSelector={() => setDrawer('site')} profile={profile} onLogout={onLogout} />
       <main className="erp-dashboard">
-        <TeamPanel team={team} presentTeam={presentTeam} available={available} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} vehicleId={vehicleId} changeVehicle={setVehicleId} togglePresence={togglePresence} removeMember={removeMember} addMember={addMember} />
+        <TeamPanel team={team} presentTeam={presentTeam} available={available} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} vehicleId={vehicleId} changeVehicle={changeVehicle} vehicles={vehicles} togglePresence={togglePresence} removeMember={removeMember} addMember={addMember} />
         <ActionPanel onAction={recordAction} targetLabel={targetLabel} disabled={!presentTeam.length} />
-        <SiteContext site={site} flash={setToast} openFile={openFile} />
+        <SiteContext site={site} flash={setToast} openFile={openFile} openQuote={openQuote} lifting={nextLifting} />
       </main>
-      {drawer === 'site' && <SiteDrawer site={site} selectSite={selectSite} close={() => setDrawer(null)} />}
-      {drawer === 'file' && <FileDrawer fileId={fileId} site={site} close={() => setDrawer(null)} flash={setToast} />}
+      {drawer === 'site' && <SiteDrawer site={site} sites={sites} selectSite={selectSite} close={() => setDrawer(null)} />}
+      {drawer === 'file' && <FileDrawer fileId={fileId} site={site} close={() => setDrawer(null)} flash={setToast} lifting={nextLifting} />}
       {toast && <div className="toast" role="status"><span className="green-check"><Icon name="check" size={13} /></span>{toast}</div>}
     </div>
   )
