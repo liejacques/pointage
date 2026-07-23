@@ -231,17 +231,33 @@ export async function loadProfile(userId) {
 export async function loadRhUsers() {
   const { data, error } = await supabase
     .from('profils')
-    .select('id, nom, prenom, identifiant_court, role, actif, created_at, profil_modules(module)')
+    .select('id, nom, prenom, identifiant_court, role, actif, created_at')
     .not('identifiant_court', 'is', null)
     .order('created_at', { ascending: false })
   if (error) throw error
+
+  const profileIds = data.map((profile) => profile.id)
+  const modulesByProfile = new Map()
+  if (profileIds.length) {
+    const { data: moduleRows, error: moduleError } = await supabase
+      .from('profil_modules')
+      .select('profil_id, module')
+      .in('profil_id', profileIds)
+    if (moduleError) throw moduleError
+    moduleRows.forEach((row) => {
+      const modules = modulesByProfile.get(row.profil_id) || []
+      modules.push(row.module)
+      modulesByProfile.set(row.profil_id, modules)
+    })
+  }
+
   return data.map((profile) => {
     const person = normalizePerson(profile)
     return {
       ...profile,
       nom_complet: person.nom_complet,
       initiales: person.initiales,
-      modules: (profile.profil_modules || []).map((item) => item.module),
+      modules: modulesByProfile.get(profile.id) || [],
     }
   })
 }
