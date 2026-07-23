@@ -91,7 +91,7 @@ const NEXT_LIFTING = {
   when: 'Demain à 08:15',
   company: 'Alsace Levage',
   driver: 'Julien Schmitt',
-  phone: '06 42 18 73 90',
+  phone: null,
   truck: 'Porteur-grue 26 t',
   capacity: 'Grue 32 t/m · portée 18 m',
   duration: '45 minutes',
@@ -384,8 +384,12 @@ function FileDrawer({ fileId, site, close, flash }) {
           <p>{NEXT_LIFTING.capacity} · intervention prévue {NEXT_LIFTING.duration}</p>
         </div>
         <div className="driver-card">
-          <div><span>CHAUFFEUR</span><strong>{NEXT_LIFTING.driver}</strong><em>Numéro disponible</em></div>
-          <a href={`tel:${NEXT_LIFTING.phone.replace(/\s/g, '')}`}><Icon name="phone" size={18} /><span>APPELER</span><strong>{NEXT_LIFTING.phone}</strong></a>
+          <div><span>CHAUFFEUR</span><strong>{NEXT_LIFTING.driver}</strong><em>{NEXT_LIFTING.phone ? 'Numéro disponible' : 'Numéro non communiqué'}</em></div>
+          {NEXT_LIFTING.phone ? (
+            <a href={`tel:${NEXT_LIFTING.phone.replace(/\s/g, '')}`}><Icon name="phone" size={18} /><span>APPELER</span><strong>{NEXT_LIFTING.phone}</strong></a>
+          ) : (
+            <div className="driver-unavailable"><Icon name="phone" size={18} /><span>CONTACT</span><strong>NON COMMUNIQUÉ</strong></div>
+          )}
         </div>
         <div className="cargo-section">
           <div><span>CHARGEMENT PRÉVU</span><strong>{NEXT_LIFTING.cargo.length} éléments à réceptionner</strong></div>
