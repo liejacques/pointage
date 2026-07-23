@@ -17,7 +17,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; background: var(--surface); }
+html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; overflow-x: hidden; background: var(--surface); }
 body { color: var(--ink); }
 button, input, a { font: inherit; }
 button { border: 0; }
@@ -313,6 +313,8 @@ button.essential-row:hover, a.essential-row:hover { background: var(--button); }
   .team-panel { grid-template-rows: 58px 58px auto; }
   .team-panel.team-standard { height: 318px; grid-template-rows: 58px minmax(0, 1fr); }
   .team-panel.team-standard.is-adding { height: 338px; }
+  .team-panel.team-standard:not(.is-adding) { height: auto; grid-template-rows: 58px auto; }
+  .team-panel.team-standard:not(.is-adding) .standard-team-list { overflow: visible; }
   .team-target-grid { grid-template-rows: repeat(2, 58px); padding: 6px; gap: 5px; }
   .whole-team-target { padding: 6px 8px; grid-template-columns: 36px minmax(0, 1fr) 20px; }
   .team-target-icon { width: 34px; height: 34px; }

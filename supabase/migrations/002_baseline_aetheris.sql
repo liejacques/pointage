@@ -1,0 +1,1 @@
+-- Dépendance : migration 002 du dépôt principal Aetheris, déjà appliquée.

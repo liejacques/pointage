@@ -9,7 +9,7 @@ Fonctions disponibles :
 - cases cochées ou vides pour inclure chaque personne dans le pointage ;
 - actions « Changer véhicule » et « Ajouter dans l’équipe » réunies dans l’en-tête ;
 - annuaire complet avec recherche pour ajouter du personnel ;
-- actions de pointage accessibles sans défilement sur un écran mobile courant ;
+- liste d’équipe sans zone de défilement interne sur téléphone ;
 - accès direct à Google Maps depuis l’adresse du chantier ;
 - accès direct aux prévisions Météo-France du lieu ;
 - ouverture directe du devis PDF ;
@@ -41,7 +41,9 @@ Sans configuration Supabase, l’écran de connexion propose un mode démonstrat
 
 ## Configurer Supabase
 
-Le backend se trouve dans [`supabase/migrations`](./supabase/migrations). Il contient le schéma, la RLS multi-entreprise, le RPC de pointage idempotent, les rapports d’heures, Storage privé, Realtime, les permissions modulaires, le rôle RH et la tâche d’alerte de fin de journée.
+Le module se branche sur le projet Supabase du SaaS Aetheris existant. Les migrations `001` à `014` présentes ici sont des marqueurs de dépendance : leur schéma complet reste géré par le dépôt principal Aetheris. Les migrations datées ajoutent uniquement les capacités nécessaires au pointage, à la conduite de travaux et au module RH.
+
+Le module réutilise notamment `entreprises`, `profils`, `compagnons`, `chantiers`, `planning_entries`, `pointage_evenements`, `documents` et le bucket privé `documents`. Il ajoute les droits par module, les véhicules, les détails d’affectation, la logistique et les alertes sans recréer les tables socle.
 
 ```powershell
 npx supabase login
@@ -82,7 +84,7 @@ $env:RH_PASSWORD="votre-mot-de-passe"
 npm run bootstrap:rh
 ```
 
-Supprimer ensuite ces variables du terminal. Le mot de passe n’est jamais écrit dans la base en clair : Supabase Auth conserve un hash bcrypt.
+Sans `COMPANY_ID`, le script rattache le compte RH à l’entreprise du premier administrateur actif. Supprimer ensuite les variables du terminal. Le mot de passe n’est jamais écrit dans la base en clair : Supabase Auth conserve un hash bcrypt.
 
 ## Données et sécurité
 
@@ -100,6 +102,12 @@ Supprimer ensuite ces variables du terminal. Le mot de passe n’est jamais écr
 
 ```powershell
 npm run build
+```
+
+Une vérification réelle et temporaire de tout le backend est également disponible. Elle crée un utilisateur de test, un chantier, un véhicule, une affectation, un pointage, un mouvement logistique et un PDF privé, contrôle leur lecture puis supprime toutes les données de test :
+
+```powershell
+npm run smoke:backend
 ```
 
 Le projet est compatible avec un déploiement Vercel standard pour une application Vite.

@@ -17,8 +17,7 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const identifier = process.env.RH_IDENTIFIER.trim().toLocaleLowerCase('fr')
 const password = process.env.RH_PASSWORD
 const name = (process.env.RH_NAME || 'Responsable RH').trim()
-const companyName = (process.env.COMPANY_NAME || 'Aetheris').trim()
-const companySlug = (process.env.COMPANY_SLUG || 'aetheris').trim().toLocaleLowerCase('fr')
+const requestedCompanyId = process.env.COMPANY_ID || null
 
 if (!/^[a-z0-9][a-z0-9._-]{1,30}$/.test(identifier)) throw new Error('Identifiant RH invalide.')
 if (!/^\S{5,32}$/.test(password)) throw new Error('Mot de passe RH invalide.')
@@ -27,12 +26,33 @@ const admin = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 
-const companyResult = await admin
-  .from('entreprises')
-  .upsert({ nom: companyName, slug: companySlug, actif: true }, { onConflict: 'slug' })
-  .select('id')
-  .single()
-if (companyResult.error) throw companyResult.error
+let companyId = requestedCompanyId
+let companyName = ''
+
+if (companyId) {
+  const companyResult = await admin
+    .from('entreprises')
+    .select('id, raison_sociale')
+    .eq('id', companyId)
+    .single()
+  if (companyResult.error) throw companyResult.error
+  companyName = companyResult.data.raison_sociale
+} else {
+  const adminProfile = await admin
+    .from('profils')
+    .select('entreprise_id, entreprises(raison_sociale)')
+    .in('role', ['admin', 'direction'])
+    .not('entreprise_id', 'is', null)
+    .eq('actif', true)
+    .order('created_at')
+    .limit(1)
+    .maybeSingle()
+  if (adminProfile.error || !adminProfile.data?.entreprise_id) {
+    throw adminProfile.error || new Error('Aucune entreprise administrée disponible.')
+  }
+  companyId = adminProfile.data.entreprise_id
+  companyName = adminProfile.data.entreprises?.raison_sociale || 'Entreprise Aetheris'
+}
 
 const email = `${identifier}@login.aetheris.local`
 const technicalPassword = `Ae26!${password}`
@@ -69,13 +89,17 @@ const initials = name
   .map((part) => part[0])
   .join('')
   .toUpperCase()
+const nameParts = name.split(/\s+/)
+const firstName = nameParts.length > 1 ? nameParts[0] : ''
+const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]
 
 const profileResult = await admin.from('profils').upsert({
   id: user.id,
-  entreprise_id: companyResult.data.id,
+  entreprise_id: companyId,
   role: 'rh',
-  nom_complet: name,
-  initiales: initials || 'RH',
+  email,
+  nom: lastName,
+  prenom: firstName,
   identifiant_court: identifier,
   actif: true,
 }, { onConflict: 'id' })
@@ -83,10 +107,9 @@ if (profileResult.error) throw profileResult.error
 
 const moduleResult = await admin.from('profil_modules').upsert({
   profil_id: user.id,
-  entreprise_id: companyResult.data.id,
+  entreprise_id: companyId,
   module: 'rh',
 }, { onConflict: 'profil_id,module' })
 if (moduleResult.error) throw moduleResult.error
 
-console.log(`Compte RH activé pour l’identifiant « ${identifier} » dans l’entreprise « ${companyName} ».`)
-
+console.log(`Compte RH activé dans l’entreprise « ${companyName} » (${initials || 'RH'}).`)

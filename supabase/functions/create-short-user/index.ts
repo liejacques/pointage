@@ -51,6 +51,15 @@ function initialsFor(name: string) {
     .toUpperCase()
 }
 
+function splitName(name: string) {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return { prenom: '', nom: parts[0] }
+  return {
+    prenom: parts[0],
+    nom: parts.slice(1).join(' '),
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (request.method !== 'POST') return json({ message: 'Méthode non autorisée.' }, 405)
@@ -136,17 +145,18 @@ Deno.serve(async (request) => {
 
   const createdId = createdUser.data.user.id
   let companionId: string | null = null
+  const personName = splitName(name)
 
   try {
     const profileResult = await admin.from('profils').upsert({
       id: createdId,
       entreprise_id: caller.entreprise_id,
       role,
-      nom_complet: name,
-      initiales: initialsFor(name),
+      email: technicalEmail(identifier),
+      nom: personName.nom,
+      prenom: personName.prenom,
       identifiant_court: identifier,
       actif: true,
-      cree_par: caller.id,
     }, { onConflict: 'id' })
     if (profileResult.error) throw profileResult.error
 
@@ -163,13 +173,15 @@ Deno.serve(async (request) => {
     if (modules.includes('terrain')) {
       const companionResult = await admin
         .from('compagnons')
-        .upsert({
+        .insert({
           entreprise_id: caller.entreprise_id,
           profil_id: createdId,
-          nom_complet: name,
-          initiales: initialsFor(name),
+          nom: personName.nom,
+          prenom: personName.prenom,
+          initials: initialsFor(name),
+          role: 'compagnon',
           actif: true,
-        }, { onConflict: 'entreprise_id,nom_complet' })
+        })
         .select('id')
         .single()
       if (companionResult.error) throw companionResult.error

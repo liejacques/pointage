@@ -199,13 +199,13 @@ function HoursView({ data, date, setDate }) {
         <header><span>Personne</span><span>Chantier</span><span>Début</span><span>Fin</span><span>Pointages</span><span>Heures</span><span>État</span></header>
         {data.reports.map((report) => (
           <div key={report.affectation_id}>
-            <strong>{report.compagnon_nom}</strong>
-            <span>{report.chantier_reference} · {report.chantier_nom}</span>
-            <time>{formatTime(report.premier_pointage)}</time>
-            <time>{formatTime(report.dernier_pointage)}</time>
-            <b>{report.nombre_pointages}</b>
-            <strong>{formatHours(report.minutes_travaillees)}</strong>
-            <em className={report.journee_terminee ? 'report-done' : report.nombre_pointages ? 'report-live' : 'report-missing'}>{report.journee_terminee ? 'Terminée' : report.nombre_pointages ? 'En cours' : 'Manquant'}</em>
+            <strong data-label="Personne">{report.compagnon_nom}</strong>
+            <span data-label="Chantier">{report.chantier_reference} · {report.chantier_nom}</span>
+            <time data-label="Début">{formatTime(report.premier_pointage)}</time>
+            <time data-label="Fin">{formatTime(report.dernier_pointage)}</time>
+            <b data-label="Pointages">{report.nombre_pointages}</b>
+            <strong data-label="Heures">{formatHours(report.minutes_travaillees)}</strong>
+            <em data-label="État" className={report.journee_terminee ? 'report-done' : report.nombre_pointages ? 'report-live' : 'report-missing'}>{report.journee_terminee ? 'Terminée' : report.nombre_pointages ? 'En cours' : 'Manquant'}</em>
           </div>
         ))}
         {!data.reports.length && <Empty>Aucun rapport pour cette date.</Empty>}
@@ -400,6 +400,12 @@ export default function ConducteurApp({ profile, demo = false, onLogout }) {
     })
   }, [demo, profile.entreprise_id, refresh])
 
+  useEffect(() => {
+    if (demo) return undefined
+    const timer = window.setInterval(refresh, 120_000)
+    return () => window.clearInterval(timer)
+  }, [demo, refresh])
+
   const stats = useMemo(() => {
     const pointed = new Set(data.punches.filter((item) => item.action === 'debut_activite').map((item) => item.compagnon_id)).size
     return {
@@ -456,4 +462,3 @@ export default function ConducteurApp({ profile, demo = false, onLogout }) {
     </div>
   )
 }
-

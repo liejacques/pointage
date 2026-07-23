@@ -2,6 +2,7 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 const OFFLINE_QUEUE_KEY = 'aetheris-pointages-en-attente'
 const SHORT_LOGIN_DOMAIN = 'login.aetheris.local'
+const PARIS_TIMEZONE = 'Europe/Paris'
 
 export function normalizeShortIdentifier(value) {
   return String(value || '').trim().toLocaleLowerCase('fr')
@@ -13,13 +14,172 @@ function technicalPassword(shortPassword) {
 
 export function localDate(value = new Date()) {
   const parts = new Intl.DateTimeFormat('fr-CA', {
-    timeZone: 'Europe/Paris',
+    timeZone: PARIS_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(value)
   const get = (type) => parts.find((part) => part.type === type)?.value
   return `${get('year')}-${get('month')}-${get('day')}`
+}
+
+function dayRange(date) {
+  const start = new Date(`${date}T00:00:00`)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start: start.toISOString(), end: end.toISOString() }
+}
+
+function formatTimeValue(value) {
+  if (!value) return null
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: PARIS_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value))
+}
+
+function fullName(person) {
+  return [person?.prenom, person?.nom].filter(Boolean).join(' ').trim() || 'Utilisateur'
+}
+
+function normalizePerson(person) {
+  return {
+    ...person,
+    nom_complet: fullName(person),
+    initiales: person.initials || fullName(person)
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase(),
+  }
+}
+
+function normalizeSite(site) {
+  return {
+    ...site,
+    reference: site.no || 'SANS RÉF.',
+    nom: site.label || site.client || 'Chantier',
+    ville: site.city || '',
+    adresse: site.adresse_chantier || '',
+    code_postal: '',
+    client_nom: site.client || '',
+  }
+}
+
+function normalizeDocument(document) {
+  return {
+    ...document,
+    type_document: document.categorie_metier || (document.type === 'pdf' ? 'autre' : document.type),
+    nom_fichier: document.nom,
+    storage_path: document.chemin_fichier,
+    mime_type: document.mime_type,
+    taille_octets: document.taille,
+    chantiers: document.chantiers ? normalizeSite(document.chantiers) : null,
+  }
+}
+
+function assignmentParts(id) {
+  const [planningEntryId, personId] = String(id || '').split(':')
+  if (!planningEntryId || !personId) throw new Error('Affectation invalide.')
+  return { planningEntryId, personId }
+}
+
+function normalizeAssignments({ planning, sites, people, vehicles, details }) {
+  const siteById = new Map(sites.map((site) => [site.id, normalizeSite(site)]))
+  const personById = new Map(people.map((person) => [person.id, normalizePerson(person)]))
+  const vehicleById = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]))
+  const detailByKey = new Map(details.map((detail) => [
+    `${detail.planning_entry_id}:${detail.compagnon_id}`,
+    detail,
+  ]))
+
+  return planning.flatMap((entry) => (entry.compagnon_ids || []).map((personId) => {
+    const detail = detailByKey.get(`${entry.id}:${personId}`)
+    const vehicle = detail?.vehicule_id ? vehicleById.get(detail.vehicule_id) : null
+    return {
+      id: `${entry.id}:${personId}`,
+      planning_entry_id: entry.id,
+      entreprise_id: entry.entreprise_id,
+      chantier_id: entry.chantier_id,
+      compagnon_id: personId,
+      vehicule_id: detail?.vehicule_id || null,
+      jour: localDate(new Date(entry.date_debut)),
+      heure_debut_prevue: formatTimeValue(entry.date_debut),
+      heure_fin_prevue: formatTimeValue(entry.date_fin),
+      inclus_pointage: detail?.inclus_pointage ?? true,
+      statut: 'confirmee',
+      chantiers: siteById.get(entry.chantier_id) || null,
+      compagnons: personById.get(personId) || null,
+      vehicules: vehicle || null,
+    }
+  }))
+}
+
+function actionFromEvent(event) {
+  const explicit = String(event.note || '').match(/(?:^|\n)action:([a-z_]+)/)?.[1]
+  if (explicit) return explicit
+  if (event.activite === 'pause') return 'pause'
+  if (event.activite === 'admin') return 'reunion'
+  if (event.activite === 'preparation') return 'enlevement_materiaux'
+  return 'debut_activite'
+}
+
+function eventPunches(events, personById, siteById) {
+  return events.flatMap((event) => {
+    const common = {
+      compagnon_id: event.compagnon_id,
+      chantier_id: event.chantier_id,
+      compagnons: personById.get(event.compagnon_id) || null,
+      chantiers: siteById.get(event.chantier_id) || null,
+    }
+    const punches = [{
+      ...common,
+      id: `${event.id}-start`,
+      action: actionFromEvent(event),
+      pointe_a: event.debut,
+    }]
+    if (event.fin) {
+      punches.push({
+        ...common,
+        id: `${event.id}-finish`,
+        action: 'fin_activite',
+        pointe_a: event.fin,
+      })
+    }
+    return punches
+  }).sort((a, b) => new Date(b.pointe_a) - new Date(a.pointe_a))
+}
+
+function dailyReports(assignments, events) {
+  return assignments.map((assignment) => {
+    const personEvents = events
+      .filter((event) => event.compagnon_id === assignment.compagnon_id)
+      .sort((a, b) => new Date(a.debut) - new Date(b.debut))
+    const workedMs = personEvents.reduce((sum, event) => {
+      if (event.activite === 'pause') return sum
+      const end = event.fin ? new Date(event.fin) : new Date()
+      return sum + Math.max(end - new Date(event.debut), 0)
+    }, 0)
+    const finishedEvents = personEvents.filter((event) => event.fin)
+    return {
+      affectation_id: assignment.id,
+      entreprise_id: assignment.entreprise_id,
+      jour: assignment.jour,
+      chantier_id: assignment.chantier_id,
+      chantier_reference: assignment.chantiers?.reference,
+      chantier_nom: assignment.chantiers?.nom,
+      compagnon_id: assignment.compagnon_id,
+      compagnon_nom: assignment.compagnons?.nom_complet,
+      premier_pointage: personEvents[0]?.debut || null,
+      dernier_pointage: finishedEvents.at(-1)?.fin || null,
+      minutes_travaillees: Math.round(workedMs / 60_000),
+      nombre_pointages: personEvents.length + finishedEvents.length,
+      journee_terminee: personEvents.length > 0 && personEvents.every((event) => event.fin),
+    }
+  }).sort((a, b) => String(a.compagnon_nom).localeCompare(String(b.compagnon_nom), 'fr'))
 }
 
 export async function getSession() {
@@ -58,7 +218,7 @@ export async function signOut() {
 }
 
 export async function loadProfile(userId) {
-  const { data, error } = await supabase.rpc('get_user_context_v1')
+  const { data, error } = await supabase.rpc('get_pointage_user_context_v1')
   if (error) throw error
   if (!data || data.id !== userId) return null
   return {
@@ -71,14 +231,19 @@ export async function loadProfile(userId) {
 export async function loadRhUsers() {
   const { data, error } = await supabase
     .from('profils')
-    .select('id, nom_complet, initiales, identifiant_court, role, actif, created_at, profil_modules(module)')
+    .select('id, nom, prenom, identifiant_court, role, actif, created_at, profil_modules(module)')
     .not('identifiant_court', 'is', null)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data.map((profile) => ({
-    ...profile,
-    modules: (profile.profil_modules || []).map((item) => item.module),
-  }))
+  return data.map((profile) => {
+    const person = normalizePerson(profile)
+    return {
+      ...profile,
+      nom_complet: person.nom_complet,
+      initiales: person.initiales,
+      modules: (profile.profil_modules || []).map((item) => item.module),
+    }
+  })
 }
 
 export async function createShortUser(payload) {
@@ -103,58 +268,59 @@ export async function createShortUser(payload) {
   return data.user
 }
 
-function unwrap(value) {
-  return Array.isArray(value) ? value[0] : value
-}
+async function loadOperationalData(date, { refreshAlerts = false } = {}) {
+  const { start, end } = dayRange(date)
+  if (refreshAlerts) {
+    const refreshed = await supabase.rpc('refresh_alertes_pointage_v1', { p_jour: date })
+    if (refreshed.error) throw refreshed.error
+  }
 
-export async function loadConductorData(date = localDate()) {
-  const start = new Date(`${date}T00:00:00`).toISOString()
-  const end = new Date(`${date}T23:59:59`).toISOString()
   const [
     sitesResult,
     peopleResult,
     vehiclesResult,
-    assignmentsResult,
-    punchesResult,
-    reportsResult,
+    planningResult,
+    detailsResult,
+    eventsResult,
     alertsResult,
     documentsResult,
     logisticsResult,
   ] = await Promise.all([
-    supabase.from('chantiers').select('*').neq('statut', 'archive').order('reference'),
-    supabase.from('compagnons').select('*').eq('actif', true).order('nom_complet'),
+    supabase.from('chantiers').select('*').order('no'),
+    supabase
+      .from('compagnons')
+      .select('id, entreprise_id, profil_id, nom, prenom, initials, role, couleur, actif, created_at, updated_at')
+      .eq('actif', true)
+      .order('nom'),
     supabase.from('vehicules').select('*').eq('actif', true).order('libelle'),
     supabase
-      .from('affectations')
-      .select('*, chantiers(id, reference, nom, ville), compagnons(id, nom_complet, initiales), vehicules(id, libelle, immatriculation)')
-      .eq('jour', date)
-      .neq('statut', 'annulee')
-      .order('heure_debut_prevue'),
-    supabase
-      .from('pointages')
-      .select('*, compagnons(nom_complet, initiales), chantiers(reference, nom)')
-      .eq('jour_travail', date)
-      .order('pointe_a', { ascending: false }),
-    supabase
-      .from('rapports_heures_journaliers')
+      .from('planning_entries')
       .select('*')
-      .eq('jour', date)
-      .order('compagnon_nom'),
+      .lt('date_debut', end)
+      .gt('date_fin', start)
+      .order('date_debut'),
+    supabase.from('planning_affectation_details').select('*'),
     supabase
-      .from('alertes')
-      .select('*, compagnons(nom_complet), chantiers(reference, nom)')
+      .from('pointage_evenements')
+      .select('*')
+      .gte('debut', start)
+      .lt('debut', end)
+      .order('debut', { ascending: false }),
+    supabase
+      .from('alertes_pointage')
+      .select('*, chantiers(*)')
+      .eq('jour', date)
       .eq('resolue', false)
       .order('created_at', { ascending: false }),
     supabase
-      .from('documents_chantier')
-      .select('*, chantiers(reference, nom)')
+      .from('documents')
+      .select('*, chantiers(*)')
       .order('created_at', { ascending: false })
       .limit(100),
     supabase
       .from('operations_logistiques')
-      .select('*, chantiers(reference, nom), vehicules(libelle, immatriculation)')
+      .select('*, chantiers(*), vehicules(*)')
       .gte('debut_prevu', start)
-      .lte('debut_prevu', end)
       .order('debut_prevu'),
   ])
 
@@ -162,9 +328,9 @@ export async function loadConductorData(date = localDate()) {
     sitesResult,
     peopleResult,
     vehiclesResult,
-    assignmentsResult,
-    punchesResult,
-    reportsResult,
+    planningResult,
+    detailsResult,
+    eventsResult,
     alertsResult,
     documentsResult,
     logisticsResult,
@@ -172,37 +338,45 @@ export async function loadConductorData(date = localDate()) {
   const failed = results.find((result) => result.error)
   if (failed) throw failed.error
 
-  return {
-    sites: sitesResult.data,
-    people: peopleResult.data,
+  const sites = sitesResult.data.filter((site) => !['termine', 'facture'].includes(site.statut))
+  const people = peopleResult.data.map(normalizePerson)
+  const assignments = normalizeAssignments({
+    planning: planningResult.data,
+    sites,
+    people,
     vehicles: vehiclesResult.data,
-    assignments: assignmentsResult.data.map((item) => ({
-      ...item,
-      chantiers: unwrap(item.chantiers),
-      compagnons: unwrap(item.compagnons),
-      vehicules: unwrap(item.vehicules),
+    details: detailsResult.data,
+  })
+  const personById = new Map(people.map((person) => [person.id, person]))
+  const siteById = new Map(sites.map((site) => [site.id, normalizeSite(site)]))
+  const punches = eventPunches(eventsResult.data, personById, siteById)
+
+  return {
+    sites: sites.map(normalizeSite),
+    people,
+    vehicles: vehiclesResult.data,
+    assignments,
+    events: eventsResult.data,
+    punches,
+    reports: dailyReports(assignments, eventsResult.data),
+    alerts: alertsResult.data.map((alert) => ({
+      ...alert,
+      chantiers: alert.chantiers ? normalizeSite(alert.chantiers) : null,
+      compagnons: personById.get(alert.compagnon_id) || null,
     })),
-    punches: punchesResult.data.map((item) => ({
-      ...item,
-      chantiers: unwrap(item.chantiers),
-      compagnons: unwrap(item.compagnons),
-    })),
-    reports: reportsResult.data,
-    alerts: alertsResult.data.map((item) => ({
-      ...item,
-      chantiers: unwrap(item.chantiers),
-      compagnons: unwrap(item.compagnons),
-    })),
-    documents: documentsResult.data.map((item) => ({
-      ...item,
-      chantiers: unwrap(item.chantiers),
-    })),
-    logistics: logisticsResult.data.map((item) => ({
-      ...item,
-      chantiers: unwrap(item.chantiers),
-      vehicules: unwrap(item.vehicules),
-    })),
+    documents: documentsResult.data.map(normalizeDocument),
+    logistics: logisticsResult.data
+      .filter((operation) => operation.statut !== 'annulee')
+      .map((operation) => ({
+        ...operation,
+        chantiers: operation.chantiers ? normalizeSite(operation.chantiers) : null,
+        vehicules: operation.vehicules || null,
+      })),
   }
+}
+
+export async function loadConductorData(date = localDate()) {
+  return loadOperationalData(date, { refreshAlerts: true })
 }
 
 export function subscribeToConductorData(entrepriseId, onChange) {
@@ -212,19 +386,19 @@ export function subscribeToConductorData(entrepriseId, onChange) {
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
-      table: 'pointages',
+      table: 'pointage_evenements',
       filter: `entreprise_id=eq.${entrepriseId}`,
     }, onChange)
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
-      table: 'affectations',
+      table: 'planning_entries',
       filter: `entreprise_id=eq.${entrepriseId}`,
     }, onChange)
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
-      table: 'alertes',
+      table: 'alertes_pointage',
       filter: `entreprise_id=eq.${entrepriseId}`,
     }, onChange)
     .on('postgres_changes', {
@@ -240,65 +414,74 @@ export function subscribeToConductorData(entrepriseId, onChange) {
   }
 }
 
-export async function saveAssignment({ entrepriseId, siteId, personId, vehicleId, date, userId }) {
-  const { error } = await supabase.from('affectations').upsert({
-    entreprise_id: entrepriseId,
-    chantier_id: siteId,
-    compagnon_id: personId,
-    vehicule_id: vehicleId || null,
-    jour: date,
-    statut: 'confirmee',
-    cree_par: userId,
-  }, { onConflict: 'compagnon_id,jour' })
+export async function saveAssignment({ siteId, personId, vehicleId, date }) {
+  const { error } = await supabase.rpc('enregistrer_affectation_pointage_v1', {
+    p_chantier_id: siteId,
+    p_compagnon_id: personId,
+    p_vehicule_id: vehicleId || null,
+    p_jour: date,
+    p_heure_debut: '07:30',
+    p_heure_fin: '17:00',
+  })
   if (error) throw error
 }
 
 export async function deleteAssignment(id) {
-  const { error } = await supabase.from('affectations').delete().eq('id', id)
+  const { planningEntryId, personId } = assignmentParts(id)
+  const { error } = await supabase.rpc('supprimer_affectation_pointage_v1', {
+    p_planning_entry_id: planningEntryId,
+    p_compagnon_id: personId,
+  })
   if (error) throw error
 }
 
 export async function updateAssignment(id, changes) {
-  const { error } = await supabase.from('affectations').update(changes).eq('id', id)
+  const { planningEntryId, personId } = assignmentParts(id)
+  const changesVehicle = Object.hasOwn(changes, 'vehicule_id')
+  const { error } = await supabase.rpc('modifier_affectation_pointage_v1', {
+    p_planning_entry_id: planningEntryId,
+    p_compagnon_id: personId,
+    p_inclus_pointage: Object.hasOwn(changes, 'inclus_pointage') ? changes.inclus_pointage : null,
+    p_vehicule_id: changesVehicle ? changes.vehicule_id : null,
+    p_change_vehicule: changesVehicle,
+  })
   if (error) throw error
 }
 
 export async function updateAssignments(ids, changes) {
-  if (!ids.length) return
-  const { error } = await supabase.from('affectations').update(changes).in('id', ids)
-  if (error) throw error
+  await Promise.all(ids.map((id) => updateAssignment(id, changes)))
 }
 
-export async function resolveAlert(id, userId) {
-  const { error } = await supabase
-    .from('alertes')
-    .update({ resolue: true, resolue_par: userId, resolue_a: new Date().toISOString() })
-    .eq('id', id)
+export async function resolveAlert(id) {
+  const { error } = await supabase.rpc('resoudre_alerte_pointage_v1', {
+    p_alerte_id: id,
+  })
   if (error) throw error
 }
 
 export async function uploadSiteDocument({ profile, siteId, type, file }) {
-  const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-')
+  const safeName = file.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
   const path = `${profile.entreprise_id}/${siteId}/${crypto.randomUUID()}-${safeName}`
-  const upload = await supabase.storage.from('chantier-documents').upload(path, file, {
+  const upload = await supabase.storage.from('documents').upload(path, file, {
     contentType: file.type,
     upsert: false,
   })
   if (upload.error) throw upload.error
 
-  const insert = await supabase.from('documents_chantier').insert({
-    entreprise_id: profile.entreprise_id,
-    chantier_id: siteId,
-    type_document: type,
-    nom_fichier: file.name,
-    storage_path: path,
-    mime_type: file.type,
-    taille_octets: file.size,
-    ajoute_par: profile.id,
+  const register = await supabase.rpc('enregistrer_document_pointage_v1', {
+    p_chantier_id: siteId,
+    p_categorie: type,
+    p_nom: file.name,
+    p_chemin: path,
+    p_mime_type: file.type || 'application/octet-stream',
+    p_taille: file.size,
   })
-  if (insert.error) {
-    await supabase.storage.from('chantier-documents').remove([path])
-    throw insert.error
+  if (register.error) {
+    await supabase.storage.from('documents').remove([path])
+    throw register.error
   }
 }
 
@@ -306,7 +489,7 @@ export async function openSiteDocument(path) {
   const popup = window.open('about:blank', '_blank')
   if (popup) popup.opener = null
   const { data, error } = await supabase.storage
-    .from('chantier-documents')
+    .from('documents')
     .createSignedUrl(path, 300)
   if (error) {
     popup?.close()
@@ -317,68 +500,56 @@ export async function openSiteDocument(path) {
 }
 
 export async function saveLogistics(payload) {
-  const { error } = await supabase.from('operations_logistiques').insert(payload)
+  const { error } = await supabase.rpc('creer_operation_logistique_pointage_v1', {
+    p_chantier_id: payload.chantier_id,
+    p_type_operation: payload.type_operation,
+    p_debut_prevu: payload.debut_prevu,
+    p_fournisseur: payload.fournisseur,
+    p_chauffeur_nom: payload.chauffeur_nom,
+    p_chauffeur_telephone: payload.chauffeur_telephone,
+    p_vehicule_id: payload.vehicule_id,
+    p_camion_externe: payload.camion_externe,
+    p_capacite: payload.capacite,
+    p_chargement: payload.chargement,
+    p_note: payload.note,
+  })
   if (error) throw error
 }
 
 export async function saveVehicle(payload) {
-  const { error } = await supabase.from('vehicules').insert(payload)
+  const { error } = await supabase.rpc('creer_vehicule_pointage_v1', {
+    p_libelle: payload.libelle,
+    p_immatriculation: payload.immatriculation,
+    p_type: payload.type_vehicule,
+    p_capacite: payload.capacite,
+  })
   if (error) throw error
 }
 
 export async function saveSite(payload) {
-  const { error } = await supabase.from('chantiers').insert(payload)
+  const { error } = await supabase.rpc('creer_chantier_pointage_v1', {
+    p_reference: payload.reference,
+    p_nom: payload.nom,
+    p_adresse: payload.adresse,
+    p_code_postal: payload.code_postal,
+    p_ville: payload.ville,
+  })
   if (error) throw error
 }
 
 export async function loadTerrainData(date = localDate()) {
-  const assignments = await supabase
-    .from('affectations')
-    .select('*, chantiers(*), compagnons(*), vehicules(*)')
-    .eq('jour', date)
-    .neq('statut', 'annulee')
-    .order('created_at')
-  if (assignments.error) throw assignments.error
-
-  const siteIds = [...new Set(assignments.data.map((item) => item.chantier_id))]
-  const documents = siteIds.length
-    ? await supabase
-        .from('documents_chantier')
-        .select('*')
-        .in('chantier_id', siteIds)
-        .eq('visible_terrain', true)
-        .order('created_at', { ascending: false })
-    : { data: [], error: null }
-  if (documents.error) throw documents.error
-
-  const logistics = siteIds.length
-    ? await supabase
-        .from('operations_logistiques')
-        .select('*, vehicules(*)')
-        .in('chantier_id', siteIds)
-        .gte('debut_prevu', new Date().toISOString())
-        .neq('statut', 'annulee')
-        .order('debut_prevu')
-    : { data: [], error: null }
-  if (logistics.error) throw logistics.error
-
-  const people = await supabase.from('compagnons').select('*').eq('actif', true).order('nom_complet')
-  if (people.error) throw people.error
-
-  const vehicles = await supabase.from('vehicules').select('*').eq('actif', true).order('libelle')
-  if (vehicles.error) throw vehicles.error
-
+  const data = await loadOperationalData(date)
+  const siteIds = new Set(data.assignments.map((assignment) => assignment.chantier_id))
   return {
-    assignments: assignments.data.map((item) => ({
-      ...item,
-      chantiers: unwrap(item.chantiers),
-      compagnons: unwrap(item.compagnons),
-      vehicules: unwrap(item.vehicules),
-    })),
-    people: people.data,
-    vehicles: vehicles.data,
-    documents: documents.data,
-    logistics: logistics.data.map((item) => ({ ...item, vehicules: unwrap(item.vehicules) })),
+    assignments: data.assignments,
+    people: data.people,
+    vehicles: data.vehicles,
+    documents: data.documents.filter((document) => (
+      document.visible_terrain && siteIds.has(document.chantier_id)
+    )),
+    logistics: data.logistics.filter((operation) => (
+      siteIds.has(operation.chantier_id) && new Date(operation.debut_prevu) >= new Date()
+    )),
   }
 }
 
@@ -394,15 +565,35 @@ function writeQueue(queue) {
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
 }
 
+const ACTION_ACTIVITY = {
+  start: 'production',
+  fabrication: 'production',
+  pause: 'pause',
+  instruction: 'admin',
+  meeting: 'admin',
+  materials: 'preparation',
+}
+
 async function sendPunch(item) {
-  const { error } = await supabase.rpc('enregistrer_pointage', {
-    p_client_uuid: item.clientUuid,
+  if (item.action === 'finish') {
+    const { error } = await supabase.rpc('terminer_pointage_v2', {
+      p_compagnon_id: item.personId,
+      p_fin: item.eventAt,
+      p_client_action_id: item.clientUuid,
+    })
+    if (error) throw error
+    return
+  }
+
+  const { error } = await supabase.rpc('demarrer_pointage_v2', {
     p_compagnon_id: item.personId,
+    p_activite: ACTION_ACTIVITY[item.action] || 'autre',
     p_chantier_id: item.siteId,
-    p_action: item.action,
-    p_pointe_a: item.eventAt,
-    p_note: item.note || null,
-    p_source: 'web-terrain',
+    p_debut: item.eventAt,
+    p_source: 'chef',
+    p_confiance: 'haute',
+    p_note: [`action:${item.action}`, item.note].filter(Boolean).join('\n'),
+    p_client_action_id: item.clientUuid,
   })
   if (error) throw error
 }
