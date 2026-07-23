@@ -112,10 +112,6 @@ function googleMapsUrl(address) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 }
 
-function personInitials(firstName, lastName) {
-  return `${firstName.trim().charAt(0)}${lastName.trim().charAt(0)}`.toUpperCase()
-}
-
 function Icon({ name, size = 20 }) {
   const paths = {
     down: <path d="m7 10 5 5 5-5" />,
@@ -208,28 +204,101 @@ function ActionPanel({ onAction, targetLabel, disabled }) {
   )
 }
 
-function TeamPanel({ team, selectedTarget, selectTarget, openManagement }) {
+function TeamPanel({
+  team,
+  presentTeam,
+  available,
+  selectedTarget,
+  selectTarget,
+  vehicleId,
+  changeVehicle,
+  togglePresence,
+  removeMember,
+  addMember,
+}) {
+  const [mode, setMode] = useState('point')
+  const [search, setSearch] = useState('')
+  const filteredPeople = available.filter((person) => person.name.toLocaleLowerCase('fr').includes(search.trim().toLocaleLowerCase('fr')))
+
+  if (mode === 'manage') return (
+    <section className="erp-panel team-panel is-managing">
+      <header className="panel-header team-header">
+        <div className="team-mode-title">
+          <button className="team-mode-back" onClick={() => setMode('point')} aria-label="Retour au pointage"><Icon name="arrow" size={17} /></button>
+          <div><span>ÉQUIPE ACTUELLE</span><h2>Gérer les présences</h2></div>
+        </div>
+        <button className="add-to-team-button" onClick={() => setMode('add')}><Icon name="plus" size={15} />AJOUTER DANS L’ÉQUIPE</button>
+      </header>
+      <div className="inline-team-management">
+        <label className="vehicle-selector">
+          <span className="management-icon"><Icon name="truck" size={18} /></span>
+          <div><span>VÉHICULE AFFECTÉ</span><select value={vehicleId} onChange={(event) => changeVehicle(event.target.value)}>{VEHICLES.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.label}</option>)}</select></div>
+        </label>
+        <div className="management-section-title"><span>MEMBRES DE L’ÉQUIPE</span><strong>{presentTeam.length} présents</strong></div>
+        <div className="current-team-list">
+          {team.map((member) => (
+            <div className={`current-member ${member.present ? '' : 'is-absent'}`} key={member.id}>
+              <span className="person-initials">{member.initials}</span>
+              <strong>{member.name}</strong>
+              <button className={`management-presence ${member.present ? 'is-present' : ''}`} onClick={() => togglePresence(member.id)} aria-pressed={member.present}>
+                <span><Icon name="check" size={13} /></span>{member.present ? 'PRÉSENT' : 'ABSENT'}
+              </button>
+              <button className="management-remove" onClick={() => removeMember(member.id)} aria-label={`Retirer ${member.name} de l’équipe`}><Icon name="close" size={18} /></button>
+            </div>
+          ))}
+          {!team.length && <p className="empty-state">L’équipe est vide. Utilisez « Ajouter dans l’équipe ».</p>}
+        </div>
+      </div>
+    </section>
+  )
+
+  if (mode === 'add') return (
+    <section className="erp-panel team-panel is-managing">
+      <header className="panel-header team-header">
+        <div className="team-mode-title">
+          <button className="team-mode-back" onClick={() => setMode('manage')} aria-label="Retour à l’équipe actuelle"><Icon name="arrow" size={17} /></button>
+          <div><span>ANNUAIRE</span><h2>Ajouter dans l’équipe</h2></div>
+        </div>
+        <button className="finish-team-button" onClick={() => setMode('point')}><Icon name="check" size={14} />TERMINER</button>
+      </header>
+      <div className="inline-team-directory">
+        <label className="directory-search"><Icon name="search" size={19} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher une personne…" autoFocus /></label>
+        <div className="management-section-title"><span>PERSONNES À AJOUTER</span><strong>{filteredPeople.length} résultats</strong></div>
+        <div className="directory-list">
+          {filteredPeople.map((person) => (
+            <div className="directory-person" key={person.id}>
+              <span className="person-initials">{person.initials}</span>
+              <strong>{person.name}</strong>
+              <button onClick={() => addMember(person.id)}><Icon name="plus" size={16} />AJOUTER</button>
+            </div>
+          ))}
+          {!filteredPeople.length && <p className="empty-state">Toutes les personnes sont déjà dans l’équipe ou aucun résultat ne correspond.</p>}
+        </div>
+      </div>
+    </section>
+  )
+
   return (
     <section className="erp-panel team-panel">
       <header className="panel-header team-header">
         <div><span>ÉQUIPE DU JOUR</span><h2>Qui pointer ?</h2></div>
         <div className="team-header-actions">
-          <span className="team-count">{team.length} PRÉSENTS</span>
-          <button className="manage-team-button" onClick={openManagement}><Icon name="sliders" size={15} />GÉRER</button>
+          <span className="team-count">{presentTeam.length} PRÉSENTS</span>
+          <button className="manage-team-button" onClick={() => setMode('manage')}><Icon name="sliders" size={15} />GÉRER</button>
         </div>
       </header>
       <button
         className={`whole-team-target ${selectedTarget === 'team' ? 'is-selected' : ''}`}
         onClick={() => selectTarget('team')}
-        disabled={!team.length}
+        disabled={!presentTeam.length}
         aria-pressed={selectedTarget === 'team'}
       >
         <span className="team-target-icon"><Icon name="people" size={20} /></span>
-        <div><strong>Toute l’équipe</strong><span>Pointer les {team.length} personnes</span></div>
+        <div><strong>Toute l’équipe</strong><span>Pointer les {presentTeam.length} personnes</span></div>
         <span className="selection-check"><Icon name="check" size={14} /></span>
       </button>
       <div className="team-target-grid">
-        {team.map((member) => (
+        {presentTeam.map((member) => (
           <button
             className={`person-target ${selectedTarget === member.id ? 'is-selected' : ''}`}
             key={member.id}
@@ -241,93 +310,9 @@ function TeamPanel({ team, selectedTarget, selectTarget, openManagement }) {
             <span className="selection-check"><Icon name="check" size={13} /></span>
           </button>
         ))}
-        {!team.length && <div className="no-present-team">Aucune personne présente. Ouvrir « Gérer » pour modifier l’équipe.</div>}
+        {!presentTeam.length && <div className="no-present-team">Aucune personne présente. Ouvrir « Gérer » pour modifier l’équipe.</div>}
       </div>
     </section>
-  )
-}
-
-function TeamManagementDrawer({
-  team,
-  available,
-  vehicleId,
-  changeVehicle,
-  togglePresence,
-  removeMember,
-  addMember,
-  createMember,
-  close,
-}) {
-  const [tab, setTab] = useState('current')
-  const [search, setSearch] = useState('')
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const filteredPeople = available.filter((person) => person.name.toLocaleLowerCase('fr').includes(search.trim().toLocaleLowerCase('fr')))
-
-  function submitNewPerson(event) {
-    event.preventDefault()
-    if (!firstName.trim() || !lastName.trim()) return
-    createMember(firstName.trim(), lastName.trim())
-    setFirstName('')
-    setLastName('')
-    setTab('current')
-  }
-
-  return (
-    <Drawer title="Gérer l’équipe" subtitle={`${team.filter((member) => member.present).length} présents · ${team.length} affectés`} close={close} wide>
-      <div className="team-management">
-        <div className="management-tabs" role="tablist" aria-label="Gestion de l’équipe">
-          <button className={tab === 'current' ? 'is-active' : ''} onClick={() => setTab('current')} role="tab" aria-selected={tab === 'current'}>ÉQUIPE ACTUELLE <span>{team.length}</span></button>
-          <button className={tab === 'add' ? 'is-active' : ''} onClick={() => setTab('add')} role="tab" aria-selected={tab === 'add'}>AJOUTER <span>{available.length}</span></button>
-        </div>
-
-        {tab === 'current' ? (
-          <div className="management-current">
-            <label className="vehicle-selector">
-              <span className="management-icon"><Icon name="truck" size={19} /></span>
-              <div><span>VÉHICULE AFFECTÉ</span><select value={vehicleId} onChange={(event) => changeVehicle(event.target.value)}>{VEHICLES.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.label}</option>)}</select></div>
-            </label>
-            <div className="management-section-title"><span>MEMBRES DE L’ÉQUIPE</span><strong>{team.filter((member) => member.present).length} présents</strong></div>
-            <div className="current-team-list">
-              {team.map((member) => (
-                <div className={`current-member ${member.present ? '' : 'is-absent'}`} key={member.id}>
-                  <span className="person-initials">{member.initials}</span>
-                  <strong>{member.name}</strong>
-                  <button className={`management-presence ${member.present ? 'is-present' : ''}`} onClick={() => togglePresence(member.id)} aria-pressed={member.present}>
-                    <span><Icon name="check" size={13} /></span>{member.present ? 'PRÉSENT' : 'ABSENT'}
-                  </button>
-                  <button className="management-remove" onClick={() => removeMember(member.id)} aria-label={`Retirer ${member.name} de l’équipe`}><Icon name="close" size={18} /></button>
-                </div>
-              ))}
-              {!team.length && <p className="empty-state">L’équipe est vide. Ajoutez une personne depuis l’annuaire.</p>}
-            </div>
-          </div>
-        ) : (
-          <div className="management-add">
-            <label className="directory-search"><Icon name="search" size={19} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher une personne…" /></label>
-            <div className="management-section-title"><span>PERSONNEL DISPONIBLE</span><strong>{filteredPeople.length} résultats</strong></div>
-            <div className="directory-list">
-              {filteredPeople.map((person) => (
-                <div className="directory-person" key={person.id}>
-                  <span className="person-initials">{person.initials}</span>
-                  <strong>{person.name}</strong>
-                  <button onClick={() => addMember(person.id)}><Icon name="plus" size={16} />AJOUTER</button>
-                </div>
-              ))}
-              {!filteredPeople.length && <p className="empty-state">Aucune personne trouvée.</p>}
-            </div>
-            <form className="create-person-form" onSubmit={submitNewPerson}>
-              <div className="create-person-heading"><div><span>NOUVELLE PERSONNE</span><strong>Ajouter sans quitter le chantier</strong></div><span className="new-initials">{personInitials(firstName, lastName) || '—'}</span></div>
-              <div className="create-person-fields">
-                <label><span>PRÉNOM</span><input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="Prénom" /></label>
-                <label><span>NOM</span><input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Nom" /></label>
-              </div>
-              <button className="create-person-button" type="submit" disabled={!firstName.trim() || !lastName.trim()}><Icon name="plus" size={17} />CRÉER ET AJOUTER</button>
-            </form>
-          </div>
-        )}
-      </div>
-    </Drawer>
   )
 }
 
@@ -381,10 +366,10 @@ function FileDrawer({ fileId, site, close, flash }) {
   return <Drawer title={file.label} subtitle={`Chantier ${site.id}`} close={close}>{content[file.id]}</Drawer>
 }
 
-function Drawer({ title, subtitle, close, children, wide = false }) {
+function Drawer({ title, subtitle, close, children }) {
   return (
     <div className="drawer-overlay" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && close()}>
-      <aside className={`drawer ${wide ? 'drawer-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label={title}>
         <header><div><span>{subtitle}</span><strong>{title}</strong></div><button onClick={close} aria-label="Fermer"><Icon name="close" size={22} /></button></header>
         <div className="drawer-body">{children}</div>
       </aside>
@@ -456,17 +441,6 @@ export default function App() {
     setToast(`${member.name} ajouté à l’équipe`)
   }
 
-  function createMember(firstName, lastName) {
-    const member = {
-      id: `${firstName}-${lastName}-${Date.now()}`.toLocaleLowerCase('fr').replace(/[^a-z0-9]+/g, '-'),
-      name: `${firstName} ${lastName}`,
-      initials: personInitials(firstName, lastName),
-      present: true,
-    }
-    setTeam((current) => [...current, member])
-    setToast(`${member.name} créé et ajouté`)
-  }
-
   function selectSite(id) {
     setSiteId(id)
     setDrawer(null)
@@ -482,11 +456,10 @@ export default function App() {
     <div className="app-shell">
       <Header site={site} clock={clock} todayLabel={todayLabel} openSiteSelector={() => setDrawer('site')} />
       <main className="erp-dashboard">
-        <TeamPanel team={presentTeam} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} openManagement={() => setDrawer('team')} />
+        <TeamPanel team={team} presentTeam={presentTeam} available={available} selectedTarget={selectedTarget} selectTarget={setSelectedTarget} vehicleId={vehicleId} changeVehicle={setVehicleId} togglePresence={togglePresence} removeMember={removeMember} addMember={addMember} />
         <ActionPanel onAction={recordAction} targetLabel={targetLabel} disabled={!presentTeam.length} />
         <SiteContext site={site} flash={setToast} openFile={openFile} />
       </main>
-      {drawer === 'team' && <TeamManagementDrawer team={team} available={available} vehicleId={vehicleId} changeVehicle={setVehicleId} togglePresence={togglePresence} removeMember={removeMember} addMember={addMember} createMember={createMember} close={() => setDrawer(null)} />}
       {drawer === 'site' && <SiteDrawer site={site} selectSite={selectSite} close={() => setDrawer(null)} />}
       {drawer === 'file' && <FileDrawer fileId={fileId} site={site} close={() => setDrawer(null)} flash={setToast} />}
       {toast && <div className="toast" role="status"><span className="green-check"><Icon name="check" size={13} /></span>{toast}</div>}

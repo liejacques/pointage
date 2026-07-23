@@ -6,8 +6,8 @@ Fonctions disponibles :
 
 - choix immédiat entre toute l’équipe et une personne précise avant le pointage ;
 - équipe du jour affichée en premier sur téléphone, sans métier ni spécialité ;
-- gestion de l’équipe dans un panneau dédié : véhicule, présence, retrait, recherche et ajout de personnel ;
-- création rapide d’une nouvelle personne avec initiales calculées automatiquement ;
+- gestion de l’équipe directement à la place du sélecteur de pointage : véhicule, présence et retrait ;
+- ajout du personnel au même endroit avec annuaire complet et recherche ;
 - actions de pointage accessibles sans défilement sur un écran mobile courant ;
 - accès direct à Google Maps depuis l’adresse du chantier ;
 - accès direct aux prévisions Météo-France du lieu ;

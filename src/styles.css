@@ -135,6 +135,13 @@ button.essential-row:hover, a.essential-row:hover { background: var(--button); }
 .team-count { padding: 5px 7px; color: #536068; border: 1px solid #c5caca; background: #fff; font-size: 8px; font-weight: 850; letter-spacing: .08em; }
 .manage-team-button { min-height: 30px; padding: 0 8px; display: flex; align-items: center; gap: 5px; color: #fff; background: #334650; font-size: 8px; font-weight: 850; letter-spacing: .06em; cursor: pointer; }
 .manage-team-button:hover { background: #273a44; }
+.team-mode-title { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.team-mode-title > div { min-width: 0; display: flex; flex-direction: column; }
+.team-mode-back { width: 34px; height: 34px; flex: none; display: flex; align-items: center; justify-content: center; color: #405058; border: 1px solid #bcc2c1; background: #fff; cursor: pointer; }
+.team-mode-back svg { transform: rotate(180deg); }
+.add-to-team-button, .finish-team-button { min-height: 34px; padding: 0 8px; display: flex; align-items: center; justify-content: center; gap: 5px; color: #fff; background: #334650; font-size: 8px; font-weight: 850; letter-spacing: .04em; text-align: center; cursor: pointer; }
+.add-to-team-button:hover, .finish-team-button:hover { background: #273a44; }
+.finish-team-button { background: #2d654f; }
 .whole-team-target { min-width: 0; padding: 7px 9px; display: grid; grid-template-columns: 38px minmax(0, 1fr) 22px; gap: 9px; align-items: center; border-bottom: 1px solid var(--line); color: var(--ink); background: #fff; text-align: left; cursor: pointer; }
 .whole-team-target:hover, .person-target:hover { background: var(--button); }
 .whole-team-target.is-selected { background: #edf5f1; box-shadow: inset 4px 0 0 var(--green); }
@@ -152,25 +159,27 @@ button.essential-row:hover, a.essential-row:hover { background: var(--button); }
 .person-target strong { overflow: hidden; font-size: 10px; line-height: 1.2; text-overflow: ellipsis; }
 .person-target .selection-check { width: 18px; height: 18px; }
 .no-present-team { grid-column: 1 / -1; padding: 16px; display: flex; align-items: center; justify-content: center; color: var(--muted); border: 1px dashed #b9bfbd; background: #f8f9f7; font-size: 10px; line-height: 1.4; text-align: center; }
+.team-panel.is-managing { grid-template-rows: 56px minmax(0, 1fr); }
+.inline-team-management, .inline-team-directory { min-height: 0; padding: 7px; display: grid; gap: 5px; background: #eef0ee; }
+.inline-team-management { grid-template-rows: 54px 25px minmax(0, 1fr); }
+.inline-team-directory { grid-template-rows: 46px 25px minmax(0, 1fr); }
+.inline-team-management .vehicle-selector { min-height: 54px; padding: 5px 8px; }
+.inline-team-management .management-icon { width: 34px; height: 34px; }
+.inline-team-management .vehicle-selector select { min-height: 30px; }
+.inline-team-management .current-team-list, .inline-team-directory .directory-list { min-height: 0; overflow-y: auto; }
+.inline-team-management .current-member { min-height: 50px; padding-top: 4px; padding-bottom: 4px; }
+.inline-team-management .management-presence { min-height: 30px; }
+.inline-team-management .management-remove { width: 32px; height: 32px; }
 
 .drawer-overlay { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; background: rgba(12, 19, 24, .45); }
 .drawer { width: min(475px, 94vw); height: 100%; display: grid; grid-template-rows: 58px minmax(0, 1fr); border-left: 1px solid #4e585d; color: var(--ink); background: #f7f8f6; box-shadow: -10px 0 28px rgba(0, 0, 0, .18); animation: drawer-in .15s ease; }
-.drawer-wide { width: min(640px, 96vw); }
 .drawer > header { padding: 0 12px 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid var(--header); background: #fff; }.drawer > header > div { display: flex; flex-direction: column; }.drawer > header span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }.drawer > header strong { margin-top: 2px; font-size: 17px; }.drawer > header button { width: 36px; height: 34px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 2px; color: var(--ink); background: var(--button); cursor: pointer; }
 .drawer-body { min-height: 0; padding: 14px; overflow: auto; }
-.drawer-wide .drawer-body { padding: 0; }
 
-.team-management { min-height: 100%; background: #eef0ee; }
-.management-tabs { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line-dark); background: #fff; }
-.management-tabs button { min-height: 52px; display: flex; align-items: center; justify-content: center; gap: 7px; color: #687278; border-bottom: 3px solid transparent; background: #fff; font-size: 10px; font-weight: 850; letter-spacing: .06em; cursor: pointer; }
-.management-tabs button:hover { background: #f3f4f2; }
-.management-tabs button.is-active { color: var(--ink); border-bottom-color: var(--green); background: #f8f9f7; }
-.management-tabs button span { min-width: 20px; padding: 2px 5px; color: #fff; border-radius: 10px; background: #56656d; font: 700 8px Consolas, monospace; }
-.management-current, .management-add { padding: 12px; display: grid; gap: 10px; }
 .vehicle-selector { min-height: 68px; padding: 10px 12px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid var(--line-dark); background: #fff; }
 .management-icon { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: #3d515c; }
 .vehicle-selector > div { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.vehicle-selector > div > span, .management-section-title > span, .create-person-heading > div > span, .create-person-fields label > span { color: var(--muted); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
+.vehicle-selector > div > span, .management-section-title > span { color: var(--muted); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
 .vehicle-selector select { width: 100%; min-height: 34px; padding: 0 32px 0 9px; color: var(--ink); border: 1px solid #bcc2c1; border-radius: 0; background: #f6f7f5; font-size: 11px; font-weight: 700; }
 .management-section-title { min-height: 30px; padding: 0 3px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .management-section-title strong { color: #445158; font-size: 9px; }
@@ -191,17 +200,6 @@ button.essential-row:hover, a.essential-row:hover { background: var(--button); }
 .directory-person { min-height: 58px; padding: 7px 9px; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 9px; align-items: center; border-bottom: 1px solid var(--line); }
 .directory-person > button { min-height: 34px; padding: 0 9px; display: flex; align-items: center; gap: 5px; color: #fff; background: #334650; font-size: 8px; font-weight: 850; cursor: pointer; }
 .directory-person > button:hover { background: #273a44; }
-.create-person-form { padding: 12px; display: grid; gap: 10px; border: 1px solid var(--line-dark); background: #fff; }
-.create-person-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.create-person-heading > div { display: flex; flex-direction: column; gap: 3px; }
-.create-person-heading > div > strong { font-size: 13px; }
-.new-initials { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: #435660; font: 750 10px Consolas, monospace; }
-.create-person-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.create-person-fields label { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.create-person-fields input { min-width: 0; min-height: 40px; padding: 0 9px; color: var(--ink); border: 1px solid #bcc2c1; background: #f8f9f7; font-size: 11px; }
-.create-person-button { min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 6px; color: #fff; background: #2d654f; font-size: 9px; font-weight: 850; cursor: pointer; }
-.create-person-button:disabled { color: #8a9295; background: #dfe2e0; cursor: not-allowed; }
-
 .site-list { display: grid; border: 1px solid var(--line-dark); background: #fff; }.site-list > button { min-height: 70px; padding: 8px 10px; display: grid; grid-template-columns: 60px minmax(0, 1fr) 22px; gap: 9px; align-items: center; border-bottom: 1px solid var(--line); color: var(--ink); background: #fff; text-align: left; cursor: pointer; }.site-list > button:last-child { border-bottom: 0; }.site-list > button:hover, .site-list > button.selected { background: var(--button); }.site-list > button > span:first-child { font: 700 11px Consolas, monospace; }.site-list > button > div { display: flex; flex-direction: column; }.site-list strong { font-size: 11px; }.site-list em { margin-top: 3px; color: var(--muted); font-size: 9px; font-style: normal; }.small-check { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; background: var(--green); }
 
 .info-table { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line-dark); background: #fff; }.info-table > div { min-height: 70px; padding: 10px; display: flex; flex-direction: column; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }.info-table > div:nth-child(2n) { border-right: 0; }.info-table span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .1em; }.info-table strong { margin-top: 5px; font-size: 12px; }.info-table > p { grid-column: 1 / -1; margin: 0; padding: 12px; color: #4c585f; font-size: 10px; line-height: 1.45; }
@@ -294,6 +292,7 @@ button.essential-row:hover, a.essential-row:hover { background: var(--button); }
   .action-button strong { font-size: 11px; }
   .action-button:nth-child(7) { grid-column: span 2; }
   .team-panel { grid-template-rows: 58px 58px auto; }
+  .team-panel.is-managing { height: 338px; grid-template-rows: 58px minmax(0, 1fr); }
   .team-target-grid { grid-template-rows: repeat(2, 58px); padding: 6px; gap: 5px; }
   .whole-team-target { padding: 6px 8px; grid-template-columns: 36px minmax(0, 1fr) 20px; }
   .team-target-icon { width: 34px; height: 34px; }
@@ -301,6 +300,14 @@ button.essential-row:hover, a.essential-row:hover { background: var(--button); }
   .person-initials { width: 31px; height: 31px; }
   .person-target strong { font-size: 10px; }
   .person-target .selection-check { width: 17px; height: 17px; }
+  .team-mode-title { gap: 6px; }
+  .team-mode-title h2 { overflow: hidden; max-width: 120px; text-overflow: ellipsis; white-space: nowrap; }
+  .add-to-team-button { max-width: 138px; padding: 0 6px; font-size: 7px; line-height: 1.15; }
+  .finish-team-button { padding: 0 7px; font-size: 7px; }
+  .inline-team-management, .inline-team-directory { padding: 6px; }
+  .current-member { grid-template-columns: 34px minmax(0, 1fr) 82px 34px; gap: 6px; padding-left: 6px; padding-right: 5px; }
+  .directory-person { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 6px; padding-left: 6px; padding-right: 6px; }
+  .directory-person > button { padding: 0 7px; }
   .drawer { width: 100vw; }
   .drawer-body { padding: 10px; }
   .driver-card { grid-template-columns: 1fr; }
@@ -319,4 +326,7 @@ button.essential-row:hover, a.essential-row:hover { background: var(--button); }
   .essential-row strong, .quote-shortcut strong { font-size: 11px; }
   .team-count { padding: 4px 5px; font-size: 7px; }
   .person-target strong { white-space: normal; }
+  .add-to-team-button { max-width: 112px; }
+  .team-mode-title h2 { max-width: 92px; font-size: 13px; }
+  .team-mode-back { width: 32px; height: 32px; }
 }
