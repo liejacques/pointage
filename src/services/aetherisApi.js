@@ -1,6 +1,15 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 const OFFLINE_QUEUE_KEY = 'aetheris-pointages-en-attente'
+const SHORT_LOGIN_DOMAIN = 'login.aetheris.local'
+
+export function normalizeShortIdentifier(value) {
+  return String(value || '').trim().toLocaleLowerCase('fr')
+}
+
+function technicalPassword(shortPassword) {
+  return `Ae26!${shortPassword}`
+}
 
 export function localDate(value = new Date()) {
   const parts = new Intl.DateTimeFormat('fr-CA', {
@@ -32,6 +41,16 @@ export async function signIn(email) {
   return data
 }
 
+export async function signInShort(identifier, password) {
+  const normalized = normalizeShortIdentifier(identifier)
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: `${normalized}@${SHORT_LOGIN_DOMAIN}`,
+    password: technicalPassword(password),
+  })
+  if (error) throw error
+  return data.session
+}
+
 export async function signOut() {
   if (!supabase) return
   const { error } = await supabase.auth.signOut()
@@ -39,13 +58,49 @@ export async function signOut() {
 }
 
 export async function loadProfile(userId) {
+  const { data, error } = await supabase.rpc('get_user_context_v1')
+  if (error) throw error
+  if (!data || data.id !== userId) return null
+  return {
+    ...data,
+    modules: Array.isArray(data.modules) ? data.modules : [],
+    entreprises: data.entreprise,
+  }
+}
+
+export async function loadRhUsers() {
   const { data, error } = await supabase
     .from('profils')
-    .select('id, entreprise_id, role, nom_complet, initiales, telephone, actif, entreprises(nom, logo_url)')
-    .eq('id', userId)
-    .maybeSingle()
+    .select('id, nom_complet, initiales, identifiant_court, role, actif, created_at, profil_modules(module)')
+    .not('identifiant_court', 'is', null)
+    .order('created_at', { ascending: false })
   if (error) throw error
-  return data
+  return data.map((profile) => ({
+    ...profile,
+    modules: (profile.profil_modules || []).map((item) => item.module),
+  }))
+}
+
+export async function createShortUser(payload) {
+  const { data, error } = await supabase.functions.invoke('create-short-user', {
+    body: {
+      name: payload.name,
+      identifier: normalizeShortIdentifier(payload.identifier),
+      password: payload.password,
+      modules: payload.modules,
+    },
+  })
+  if (error) {
+    let message = error.message
+    try {
+      const details = await error.context?.json()
+      message = details?.message || message
+    } catch {
+      // La réponse n'est pas toujours un JSON exploitable.
+    }
+    throw new Error(message)
+  }
+  return data.user
 }
 
 function unwrap(value) {

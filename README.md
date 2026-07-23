@@ -23,6 +23,9 @@ Fonctions disponibles :
 - rangement privé des devis et PDF par chantier ;
 - grutages, livraisons et approvisionnements avec chauffeur, camion, capacité et chargement ;
 - gestion des chantiers et du parc de véhicules.
+- accès rapide par identifiant et mot de passe courts ;
+- module RH limité à la création des utilisateurs et au choix de leurs modules ;
+- choix d’espace Terrain, Conducteur ou RH selon les autorisations du profil.
 
 ## Lancer le projet
 
@@ -38,12 +41,13 @@ Sans configuration Supabase, l’écran de connexion propose un mode démonstrat
 
 ## Configurer Supabase
 
-Le backend se trouve dans [`supabase/migrations`](./supabase/migrations). Il contient le schéma, la RLS multi-entreprise, le RPC de pointage idempotent, les rapports d’heures, Storage privé, Realtime et la tâche d’alerte de fin de journée.
+Le backend se trouve dans [`supabase/migrations`](./supabase/migrations). Il contient le schéma, la RLS multi-entreprise, le RPC de pointage idempotent, les rapports d’heures, Storage privé, Realtime, les permissions modulaires, le rôle RH et la tâche d’alerte de fin de journée.
 
 ```powershell
 npx supabase login
 npx supabase link --project-ref VOTRE_REFERENCE
 npx supabase db push
+npx supabase functions deploy create-short-user
 ```
 
 Créer ensuite les variables locales à partir de `.env.example` :
@@ -62,7 +66,23 @@ Dans Supabase Auth :
 - ajouter l’URL Vercel dans `Site URL` et les URL de redirection autorisées ;
 - rattacher chaque utilisateur à une entreprise et un rôle avec `supabase/bootstrap-user.sql.example`.
 
-Les utilisateurs reçoivent un lien magique par e-mail. Le rôle enregistré dans `profils` ouvre automatiquement l’espace conducteur ou terrain.
+Les utilisateurs peuvent recevoir un lien magique par e-mail ou utiliser l’identifiant court créé par les RH. Les modules enregistrés dans `profil_modules` déterminent les espaces proposés après la connexion.
+
+La création d’un utilisateur court est exécutée par la fonction Edge `create-short-user`. Elle vérifie que l’appelant possède le module RH, crée le compte Supabase Auth côté serveur puis affecte les modules. La clé d’administration reste uniquement dans l’environnement Supabase.
+
+### Premier compte RH
+
+Le premier compte RH se crée une seule fois avec le script de démarrage. Les valeurs sensibles sont fournies uniquement comme variables d’environnement locales et ne doivent jamais être committées :
+
+```powershell
+$env:SUPABASE_URL="https://votre-projet.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="votre-cle-serveur"
+$env:RH_IDENTIFIER="votre-identifiant"
+$env:RH_PASSWORD="votre-mot-de-passe"
+npm run bootstrap:rh
+```
+
+Supprimer ensuite ces variables du terminal. Le mot de passe n’est jamais écrit dans la base en clair : Supabase Auth conserve un hash bcrypt.
 
 ## Données et sécurité
 
@@ -70,6 +90,8 @@ Les utilisateurs reçoivent un lien magique par e-mail. Le rôle enregistré dan
 - le conducteur ne voit que ses chantiers ;
 - le chef d’équipe peut gérer l’équipe de son chantier du jour ;
 - l’ouvrier ne peut pointer que pour lui-même ;
+- le profil RH ne reçoit aucun accès chantier par défaut ;
+- un utilisateur ne voit que les modules qui lui ont été attribués ;
 - les PDF sont privés et ouverts avec une URL signée de courte durée ;
 - aucun prix n’est stocké ni affiché dans ce module ;
 - les pointages sans réseau sont conservés dans le navigateur puis resynchronisés.

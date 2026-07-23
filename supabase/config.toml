@@ -38,3 +38,5 @@ enable_signup = false
 double_confirm_changes = true
 enable_confirmations = false
 
+[functions.create-short-user]
+verify_jwt = true

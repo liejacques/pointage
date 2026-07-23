@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import PortalApp from './PortalApp.jsx'
 import './styles.css'
 import './conducteur/conducteur.css'
+import './rh/rh.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
