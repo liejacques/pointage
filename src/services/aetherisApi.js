@@ -128,6 +128,18 @@ function actionFromEvent(event) {
 }
 
 function eventPunches(events, personById, siteById) {
+  // Seul le dernier événement d'une personne peut représenter une vraie
+  // « Fin d'activité ». Les événements fermés puis suivis d'un autre
+  // (début -> pause, pause -> façonnage…) sont des transitions : leur clôture
+  // ne doit PAS s'afficher comme une fin d'activité dans l'historique.
+  const lastEventByPerson = new Map()
+  events.forEach((event) => {
+    const current = lastEventByPerson.get(event.compagnon_id)
+    if (!current || new Date(event.debut) > new Date(current.debut)) {
+      lastEventByPerson.set(event.compagnon_id, event)
+    }
+  })
+
   return events.flatMap((event) => {
     const common = {
       compagnon_id: event.compagnon_id,
@@ -141,7 +153,8 @@ function eventPunches(events, personById, siteById) {
       action: actionFromEvent(event),
       pointe_a: event.debut,
     }]
-    if (event.fin) {
+    const isLastForPerson = lastEventByPerson.get(event.compagnon_id)?.id === event.id
+    if (event.fin && isLastForPerson) {
       punches.push({
         ...common,
         id: `${event.id}-finish`,
